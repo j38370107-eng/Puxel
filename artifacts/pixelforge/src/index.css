@@ -22,23 +22,18 @@
 
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-primary-border: var(--primary-border);
 
   --color-secondary: hsl(var(--secondary));
   --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-secondary-border: var(--secondary-border);
 
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-muted-border: var(--muted-border);
 
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-accent-border: var(--accent-border);
 
   --color-destructive: hsl(var(--destructive));
   --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-destructive-border: var(--destructive-border);
 
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
@@ -52,57 +47,57 @@
 }
 
 :root {
-  /* DARK THEME BY DEFAULT */
-  --background: 228 10% 10%;
-  --foreground: 0 0% 95%;
-  --border: 228 10% 20%;
-  --card: 228 10% 13%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 228 10% 20%;
-  --popover: 228 10% 13%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 228 10% 20%;
-  --primary: 280 100% 65%; /* Retro Neon Purple */
+  /* Dark Gothic Theme Default */
+  --background: 240 16% 5%; /* #0a0a0e */
+  --foreground: 240 10% 90%;
+  --border: 240 10% 12%; 
+  --card: 240 16% 7%; /* #0d0d12 */
+  --card-foreground: 240 10% 90%;
+  --card-border: 240 10% 15%; /* #111118 */
+  --popover: 240 16% 7%;
+  --popover-foreground: 240 10% 90%;
+  --popover-border: 240 10% 15%;
+  --primary: 262 80% 50%; /* #7c3aed */
   --primary-foreground: 0 0% 100%;
-  --secondary: 180 100% 40%; /* Cyan accent */
-  --secondary-foreground: 0 0% 100%;
-  --muted: 228 10% 20%;
-  --muted-foreground: 228 10% 60%;
-  --accent: 330 100% 60%; /* Hot Pink */
+  --secondary: 266 53% 15%; /* #1a1025 */
+  --secondary-foreground: 260 85% 85%;
+  --muted: 240 10% 15%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 260 85% 65%; /* #a78bfa */
   --accent-foreground: 0 0% 100%;
-  --destructive: 0 80% 50%;
+  --destructive: 0 84% 50%; /* #dc2626 */
   --destructive-foreground: 0 0% 100%;
-  --input: 228 10% 20%;
-  --ring: 280 100% 65%;
+  --input: 240 10% 15%;
+  --ring: 262 80% 50%;
 
   --app-font-sans: 'Space Mono', monospace;
   --app-font-mono: 'Space Mono', monospace;
   --app-font-pixel: 'Press Start 2P', cursive;
-  --radius: 0rem; /* Sharp retro corners */
+  --radius: 0rem; 
 }
 
 .dark {
-  --background: 228 10% 10%;
-  --foreground: 0 0% 95%;
-  --border: 228 10% 20%;
-  --card: 228 10% 13%;
-  --card-foreground: 0 0% 95%;
-  --card-border: 228 10% 20%;
-  --popover: 228 10% 13%;
-  --popover-foreground: 0 0% 95%;
-  --popover-border: 228 10% 20%;
-  --primary: 280 100% 65%;
+  --background: 240 16% 5%;
+  --foreground: 240 10% 90%;
+  --border: 240 10% 12%;
+  --card: 240 16% 7%;
+  --card-foreground: 240 10% 90%;
+  --card-border: 240 10% 15%;
+  --popover: 240 16% 7%;
+  --popover-foreground: 240 10% 90%;
+  --popover-border: 240 10% 15%;
+  --primary: 262 80% 50%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 180 100% 40%;
-  --secondary-foreground: 0 0% 100%;
-  --muted: 228 10% 20%;
-  --muted-foreground: 228 10% 60%;
-  --accent: 330 100% 60%;
+  --secondary: 266 53% 15%;
+  --secondary-foreground: 260 85% 85%;
+  --muted: 240 10% 15%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 260 85% 65%;
   --accent-foreground: 0 0% 100%;
-  --destructive: 0 80% 50%;
+  --destructive: 0 84% 50%;
   --destructive-foreground: 0 0% 100%;
-  --input: 228 10% 20%;
-  --ring: 280 100% 65%;
+  --input: 240 10% 15%;
+  --ring: 262 80% 50%;
 }
 
 @layer base {
@@ -120,4 +115,44 @@ canvas {
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
+}
+
+/* CRT Scanline Effect */
+.crt-overlay::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 2;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+.panel-glow {
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.1);
+}
+
+.tool-active-glow {
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.4), inset 0 0 10px rgba(124, 58, 237, 0.2);
+  border-color: rgba(124, 58, 237, 0.8) !important;
+}
+
+/* Custom scrollbar for gothic vibe */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d0d12; 
+}
+::-webkit-scrollbar-thumb {
+  background: #2a1545; 
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7c3aed; 
 }

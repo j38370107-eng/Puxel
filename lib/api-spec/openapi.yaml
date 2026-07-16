@@ -1,22 +1,24 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PixelForge Pro API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: ai
+    description: AI image generation
+  - name: projects
+    description: Project save/load/library
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +26,171 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /ai/generate-sprite:
+    post:
+      operationId: generateSprite
+      tags: [ai]
+      summary: Generate pixel art sprite from text prompt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateSpriteInput"
+      responses:
+        "200":
+          description: Generated sprite image (base64)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateSpriteOutput"
+        "500":
+          description: Generation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /ai/enhance-image:
+    post:
+      operationId: enhanceImage
+      tags: [ai]
+      summary: Convert or enhance an uploaded image to pixel art style
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnhanceImageInput"
+      responses:
+        "200":
+          description: Enhanced pixel art image (base64)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateSpriteOutput"
+        "500":
+          description: Enhancement error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all saved projects
+      parameters:
+        - name: mode
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectSummary"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Save a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Saved project summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Load a full project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Full project data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectFull"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update an existing project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "200":
+          description: Updated project summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectSummary"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +201,181 @@ components:
       required:
         - status
 
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    GenerateSpriteInput:
+      type: object
+      properties:
+        prompt:
+          type: string
+          description: Text description of the desired pixel art
+        style:
+          type: string
+          description: "Art style preset: blasphemous, retro8bit, 16bit, isometric, gothic"
+          default: blasphemous
+        width:
+          type: integer
+          description: Target pixel art width
+          default: 32
+        height:
+          type: integer
+          description: Target pixel art height
+          default: 32
+        frameCount:
+          type: integer
+          description: Number of animation frames to generate (1 = static)
+          default: 1
+        referenceImage:
+          type: string
+          description: Optional base64 reference image for style consistency
+      required:
+        - prompt
+
+    GenerateSpriteOutput:
+      type: object
+      properties:
+        frames:
+          type: array
+          description: Array of base64-encoded PNG frames (1024x1024 source images)
+          items:
+            type: string
+        prompt:
+          type: string
+          description: The enhanced prompt that was used
+        style:
+          type: string
+      required:
+        - frames
+        - prompt
+        - style
+
+    EnhanceImageInput:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+          description: Base64-encoded source image to convert to pixel art
+        prompt:
+          type: string
+          description: Optional style guidance
+        style:
+          type: string
+          default: blasphemous
+        width:
+          type: integer
+          default: 32
+        height:
+          type: integer
+          default: 32
+      required:
+        - imageBase64
+
+    ProjectSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        mode:
+          type: string
+        thumbnail:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - width
+        - height
+        - mode
+        - tags
+        - createdAt
+        - updatedAt
+
+    ProjectFull:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        mode:
+          type: string
+        data:
+          description: Full ProjectData JSON
+        thumbnail:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - width
+        - height
+        - mode
+        - data
+        - tags
+        - createdAt
+        - updatedAt
+
+    ProjectInput:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        width:
+          type: integer
+        height:
+          type: integer
+        mode:
+          type: string
+        data:
+          description: Full ProjectData JSON
+        thumbnail:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - name
+        - width
+        - height
+        - data

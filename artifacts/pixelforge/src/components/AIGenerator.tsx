@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Wand2, RefreshCcw, Shuffle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
-import { aiGenerator } from '../lib/aiGenerator';
+import { Wand2, RefreshCcw, Shuffle, Sparkles, ChevronDown, ChevronUp, Upload } from 'lucide-react';
 import { SURPRISE_PROMPTS } from '../lib/pixelArtEngine';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { Selection } from '../types';
@@ -11,304 +10,270 @@ interface AIGeneratorProps {
   editor: ReturnType<typeof usePixelEditor>;
 }
 
-// ── Style presets ──────────────────────────────────────────────────────────
 const STYLE_PRESETS = [
-  { id: 'classic',   label: 'Classic',    mod: 'classic 8-bit pixel art style' },
-  { id: 'modern',    label: 'Modern',     mod: 'modern pixel art detailed' },
-  { id: 'simple',    label: 'Simple',     mod: 'simple minimal clean' },
-  { id: 'colorful',  label: 'Colorful',   mod: 'colorful vibrant saturated' },
-  { id: 'iso',       label: 'Isometric',  mod: 'isometric view' },
-  { id: 'gb',        label: 'Game Boy',   mod: 'game boy green monochrome 4 colors' },
+  { id: 'blasphemous', label: 'Blasphemous', mod: 'dark fantasy pixel art, blasphemous style, highly detailed' },
+  { id: 'retro8bit',   label: 'Retro 8-bit', mod: 'classic 8-bit pixel art style, retro palette' },
+  { id: '16bit',       label: '16-bit',      mod: '16-bit era pixel art, snes style' },
+  { id: 'isometric',   label: 'Isometric',   mod: 'isometric view pixel art' },
+  { id: 'gothic',      label: 'Gothic',      mod: 'gothic pixel art, dark colors, castlevania style' },
+  { id: 'cyberpunk',   label: 'Cyberpunk',   mod: 'cyberpunk pixel art, neon colors, dark background' },
 ] as const;
 
-// ── View presets ──────────────────────────────────────────────────────────
-const VIEWS = [
-  { id: 'front', label: 'Front' },
-  { id: 'side',  label: 'Side'  },
-  { id: 'back',  label: 'Back'  },
-] as const;
+const CANVAS_SIZES = [16, 32, 64, 128];
+const ANIMATION_FRAMES = [1, 2, 4, 8];
 
-// ── Progress steps ────────────────────────────────────────────────────────
 const STEPS = [
-  'Parsing prompt…',
-  'Sketching silhouette…',
-  'Adding costume & colours…',
-  'Drawing face & details…',
-  'Applying shading…',
-  'Final outline & polish…',
+  'Communing with the void...',
+  'Forging silhouette...',
+  'Infusing dark colors...',
+  'Carving details...',
+  'Polishing pixels...',
 ];
 
-// ── Commit frames to editor ───────────────────────────────────────────────
-async function commitFrames(
-  frames: ImageData[],
-  editor: ReturnType<typeof usePixelEditor>,
-  selection: Selection | null,
-) {
-  const { project, activeFrameId, activeLayerId, updateLayerData } = editor;
-
-  for (let fi = 0; fi < frames.length; fi++) {
-    const imgData = frames[fi];
-    const targetFrame = project.frames[fi] ?? project.frames[project.frames.length - 1];
-    if (!targetFrame) continue;
-
-    const targetLayer =
-      fi === 0
-        ? targetFrame.layers.find(l => l.id === activeLayerId) ?? targetFrame.layers[0]
-        : targetFrame.layers[0];
-
-    if (!targetLayer || targetLayer.locked) {
-      if (fi === 0) toast.error('Active layer is locked');
-      continue;
-    }
-
-    const genCanvas = document.createElement('canvas');
-    genCanvas.width = project.width;
-    genCanvas.height = project.height;
-    genCanvas.getContext('2d')!.putImageData(imgData, 0, 0);
-
-    if (selection && fi === 0) {
-      // Inpainting: paste only the selected region onto the existing layer
-      const composite = document.createElement('canvas');
-      composite.width = project.width;
-      composite.height = project.height;
-      const cCtx = composite.getContext('2d')!;
-
-      if (targetLayer.data) {
-        const existing = new Image();
-        await new Promise<void>(r => { existing.onload = () => { cCtx.drawImage(existing, 0, 0); r(); }; existing.src = targetLayer.data; });
-      }
-
-      cCtx.drawImage(
-        genCanvas,
-        selection.x, selection.y, selection.w, selection.h,
-        selection.x, selection.y, selection.w, selection.h,
-      );
-      updateLayerData(targetFrame.id, targetLayer.id, composite.toDataURL());
-    } else {
-      updateLayerData(targetFrame.id, targetLayer.id, genCanvas.toDataURL());
-    }
-  }
+function pixelateImage(base64: string, targetW: number, targetH: number): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const tiny = document.createElement('canvas');
+      tiny.width = targetW; tiny.height = targetH;
+      const tinyCtx = tiny.getContext('2d')!;
+      tinyCtx.imageSmoothingEnabled = false;
+      tinyCtx.drawImage(img, 0, 0, targetW, targetH);
+      resolve(tiny.toDataURL('image/png'));
+    };
+    img.src = 'data:image/png;base64,' + base64;
+  });
 }
 
 export const AIGenerator: React.FC<AIGeneratorProps> = ({ editor }) => {
-  const [prompt, setPrompt]           = useState('');
-  const [refineText, setRefineText]   = useState('');
-  const [lastPrompt, setLastPrompt]   = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [refineText, setRefineText] = useState('');
+  const [lastPrompt, setLastPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [stepIndex, setStepIndex]     = useState(0);
-  const [showRefine, setShowRefine]   = useState(false);
-  const [styleId, setStyleId]         = useState<string>('classic');
-  const [viewId, setViewId]           = useState<string>('front');
+  const [stepIndex, setStepIndex] = useState(0);
+  const [showRefine, setShowRefine] = useState(false);
+  const [styleId, setStyleId] = useState<string>('blasphemous');
+  const [frameCount, setFrameCount] = useState<number>(1);
+  const [referenceImage, setReferenceImage] = useState<string | null>(null);
 
-  const { project, selection, saveHistory } = editor;
+  const { project, selection, saveHistory, activeFrameId, activeLayerId, updateLayerData, setProject } = editor;
 
-  // ── Build full prompt with style + view modifiers ──────────────────────
-  const buildFullPrompt = useCallback((base: string) => {
-    const style = STYLE_PRESETS.find(s => s.id === styleId);
-    const view  = viewId !== 'front' ? `${viewId} view` : '';
-    const parts = [base.trim(), view, style?.mod].filter(Boolean);
-    return parts.join(', ');
-  }, [styleId, viewId]);
+  const handleReferenceUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setReferenceImage((event.target?.result as string).split(',')[1]); // remove data:image/png;base64,
+    };
+    reader.readAsDataURL(file);
+  };
 
-  // ── Run generation with animated progress ─────────────────────────────
-  const runWithProgress = useCallback(async (work: () => ImageData[]) => {
+  const commitFrames = async (framesBase64: string[]) => {
+    saveHistory();
+    const pixelatedDataUrls = await Promise.all(framesBase64.map(b64 => pixelateImage(b64, project.width, project.height)));
+    
+    setProject(p => {
+      const newFrames = [...p.frames];
+      
+      for (let fi = 0; fi < pixelatedDataUrls.length; fi++) {
+        const dataUrl = pixelatedDataUrls[fi];
+        
+        if (fi < newFrames.length) {
+          // Update existing frame
+          const targetFrame = newFrames[fi];
+          const layerId = fi === 0 ? activeLayerId : targetFrame.layers[0].id;
+          newFrames[fi] = {
+            ...targetFrame,
+            layers: targetFrame.layers.map(l => l.id === layerId ? { ...l, data: dataUrl } : l)
+          };
+        } else {
+          // Create new frame
+          newFrames.push({
+            id: crypto.randomUUID(),
+            duration: newFrames[0].duration,
+            layers: newFrames[0].layers.map(l => ({ ...l, id: crypto.randomUUID(), data: l.id === activeLayerId ? dataUrl : '' }))
+          });
+        }
+      }
+      return { ...p, frames: newFrames };
+    });
+  };
+
+  const handleGenerate = async () => {
+    if (!prompt.trim()) return;
+    
     setIsGenerating(true);
     setStepIndex(0);
-    const stepMs = 130;
-    for (let i = 0; i < STEPS.length - 1; i++) {
-      await new Promise(r => setTimeout(r, stepMs));
-      setStepIndex(i + 1);
-    }
-    let frames: ImageData[];
+    const stepInterval = setInterval(() => {
+      setStepIndex(s => Math.min(s + 1, STEPS.length - 1));
+    }, 1500);
+
     try {
-      frames = work();
-    } catch {
-      toast.error('Generation failed — try a different prompt');
+      const fullPrompt = `${prompt}, ${STYLE_PRESETS.find(s => s.id === styleId)?.mod || ''}`;
+      
+      const payload: any = {
+        prompt: fullPrompt,
+        style: styleId,
+        width: project.width,
+        height: project.height,
+        frameCount: frameCount
+      };
+      if (referenceImage) payload.referenceImage = referenceImage;
+
+      const response = await fetch('/api/ai/generate-sprite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) throw new Error('Generation failed');
+      
+      const { frames } = await response.json();
+      if (!frames || frames.length === 0) throw new Error('No frames returned');
+      
+      clearInterval(stepInterval);
+      setStepIndex(STEPS.length - 1);
+      
+      await commitFrames(frames);
+      setLastPrompt(prompt);
+      toast.success(`Generated ${frames.length} frame(s)!`);
+      
+    } catch (e) {
+      clearInterval(stepInterval);
+      toast.error('The void did not answer. Try again.');
+    } finally {
       setIsGenerating(false);
-      return;
     }
-    saveHistory();
-    await commitFrames(frames, editor, selection);
-    setIsGenerating(false);
-  }, [editor, saveHistory, selection]);
+  };
 
-  const handleGenerate = useCallback(async () => {
-    if (!prompt.trim()) return;
-    const full = buildFullPrompt(prompt);
-    await runWithProgress(() => {
-      const frames = aiGenerator.generateFrames(full, project.width, project.height);
-      setLastPrompt(full);
-      return frames;
-    });
-    const where = selection ? 'selection' : 'canvas';
-    toast.success(`Sprite generated on ${where}!`);
-  }, [prompt, project.width, project.height, buildFullPrompt, runWithProgress, selection]);
-
-  const handleRefine = useCallback(async () => {
-    if (!refineText.trim()) return;
-    const base = lastPrompt || buildFullPrompt(prompt);
-    if (!base) { toast.error('Generate a sprite first'); return; }
-    await runWithProgress(() => {
-      const frames = aiGenerator.refine(base, refineText.trim(), project.width, project.height);
-      setLastPrompt(`${base} ${refineText.trim()}`);
-      return frames;
-    });
-    toast.success('Sprite refined!');
-  }, [refineText, lastPrompt, prompt, buildFullPrompt, project.width, project.height, runWithProgress]);
-
-  const handleSurprise = useCallback(async () => {
+  const handleSurprise = () => {
     const pick = SURPRISE_PROMPTS[Math.floor(Math.random() * SURPRISE_PROMPTS.length)];
-    const full = buildFullPrompt(pick);
     setPrompt(pick);
-    setRefineText('');
-    await runWithProgress(() => {
-      const frames = aiGenerator.generateFrames(full, project.width, project.height);
-      setLastPrompt(full);
-      return frames;
-    });
-    toast.success(pick);
-  }, [project.width, project.height, buildFullPrompt, runWithProgress]);
+  };
 
   const onPromptKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate(); } };
-  const onRefineKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleRefine(); } };
-
-  const isAnimated = aiGenerator.isAnimated(buildFullPrompt(prompt));
 
   return (
-    <div className="p-3 border-b border-border bg-card flex flex-col gap-2">
-      {/* Header */}
-      <div className="flex items-center gap-2 text-[10px] font-pixel text-primary uppercase tracking-wider">
-        <Sparkles size={12} /> Pixel AI
+    <div className="p-4 border-b border-[#111118] bg-[#0a0a0e] flex flex-col gap-4">
+      <div className="flex items-center gap-2 text-[12px] font-pixel text-primary uppercase tracking-widest drop-shadow-[0_0_8px_rgba(124,58,237,0.8)]">
+        <Sparkles size={14} /> AI Studio
       </div>
 
-      {/* Style presets */}
-      <div className="flex flex-wrap gap-1">
-        {STYLE_PRESETS.map(s => (
-          <button
-            key={s.id}
-            onClick={() => setStyleId(s.id)}
-            className={cn(
-              'font-pixel text-[8px] px-2 py-0.5 rounded-sm border transition-colors',
-              styleId === s.id
-                ? 'bg-primary border-primary text-primary-foreground'
-                : 'bg-muted border-border text-muted-foreground hover:border-primary/50'
-            )}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {/* View selector */}
-      <div className="flex gap-1">
-        {VIEWS.map(v => (
-          <button
-            key={v.id}
-            onClick={() => setViewId(v.id)}
-            className={cn(
-              'flex-1 font-pixel text-[8px] py-0.5 rounded-sm border transition-colors',
-              viewId === v.id
-                ? 'bg-accent/30 border-accent text-accent'
-                : 'bg-muted border-border text-muted-foreground hover:border-accent/50'
-            )}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Selection indicator */}
-      {selection && (
-        <div className="flex items-center gap-1 text-[8px] font-mono text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-sm">
-          <span>⬚</span>
-          Inpaint {selection.w}×{selection.h} selection
+      <div className="flex flex-col gap-2">
+        <label className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider">Style</label>
+        <div className="flex flex-wrap gap-1.5">
+          {STYLE_PRESETS.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setStyleId(s.id)}
+              className={cn(
+                'font-pixel text-[8px] px-2 py-1.5 rounded-sm border transition-all',
+                styleId === s.id
+                  ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(124,58,237,0.3)]'
+                  : 'bg-[#111118] border-[#1a1a24] text-muted-foreground hover:border-[#2a1545] hover:text-foreground'
+              )}
+            >
+              {s.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* Prompt */}
-      <textarea
-        value={prompt}
-        onChange={e => setPrompt(e.target.value)}
-        onKeyDown={onPromptKey}
-        placeholder="jester, blue wizard, fire dragon…"
-        className="w-full h-14 bg-input border border-border rounded-sm p-2 text-xs font-mono text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary"
-        disabled={isGenerating}
-      />
-
-      {isAnimated && (
-        <div className="text-[8px] font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-sm self-start">
-          ✦ 4 animation frames
+      <div className="flex flex-col gap-2">
+        <label className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider">Animation</label>
+        <div className="flex gap-1.5">
+          {ANIMATION_FRAMES.map(count => (
+            <button
+              key={count}
+              onClick={() => setFrameCount(count)}
+              className={cn(
+                'flex-1 font-pixel text-[8px] py-1.5 rounded-sm border transition-all',
+                frameCount === count
+                  ? 'bg-accent/20 border-accent text-accent shadow-[0_0_10px_rgba(167,139,250,0.3)]'
+                  : 'bg-[#111118] border-[#1a1a24] text-muted-foreground hover:border-[#2a1545] hover:text-foreground'
+              )}
+            >
+              {count === 1 ? 'STATIC' : `${count} FRAMES`}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <textarea
+          value={prompt}
+          onChange={e => setPrompt(e.target.value)}
+          onKeyDown={onPromptKey}
+          placeholder="Describe your pixel art..."
+          className="w-full h-24 bg-[#111118] border border-[#1a1a24] rounded-sm p-3 text-xs font-mono text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary/50 focus:shadow-[0_0_15px_rgba(124,58,237,0.1)] transition-all"
+          disabled={isGenerating}
+        />
+        
+        <label className={cn(
+          "w-full h-10 border border-dashed rounded-sm flex items-center justify-center gap-2 cursor-pointer transition-colors text-xs font-mono",
+          referenceImage ? "border-primary text-primary bg-primary/5" : "border-[#1a1a24] text-muted-foreground hover:border-primary/50 hover:text-primary/80 bg-[#111118]"
+        )}>
+          <input type="file" accept="image/*" className="hidden" onChange={handleReferenceUpload} />
+          <Upload size={14} />
+          {referenceImage ? "Reference Image Loaded" : "Drop Reference Image"}
+        </label>
+      </div>
 
       {isGenerating && (
-        <div className="text-[8px] font-mono text-muted-foreground flex items-center gap-1.5 animate-pulse">
-          <RefreshCcw size={8} className="animate-spin" />
-          {STEPS[stepIndex]}
+        <div className="text-[9px] font-pixel text-primary flex items-center gap-2 animate-pulse bg-primary/10 p-2 rounded-sm border border-primary/20">
+          <RefreshCcw size={12} className="animate-spin shrink-0" />
+          <span className="truncate">{STEPS[stepIndex]}</span>
         </div>
       )}
 
-      {/* Generate + Surprise */}
-      <div className="flex gap-1.5">
+      <div className="flex gap-2 mt-1">
         <button
           onClick={handleGenerate}
           disabled={!prompt.trim() || isGenerating}
-          className="flex-1 bg-primary text-primary-foreground font-pixel text-[10px] py-1.5 rounded-sm hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center gap-1.5"
+          className="flex-1 bg-primary text-primary-foreground font-pixel text-[12px] py-3 rounded-sm hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(124,58,237,0.3)] hover:shadow-[0_0_25px_rgba(124,58,237,0.6)] transition-all"
         >
-          {isGenerating ? <RefreshCcw size={10} className="animate-spin" /> : <Wand2 size={10} />}
-          {selection ? 'INPAINT' : 'GENERATE'}
+          {isGenerating ? <RefreshCcw size={14} className="animate-spin" /> : <Wand2 size={14} />}
+          ✦ GENERATE
         </button>
         <button
           onClick={handleSurprise}
           disabled={isGenerating}
           title="Surprise Me"
-          className="bg-secondary text-secondary-foreground font-pixel text-[10px] px-2.5 py-1.5 rounded-sm hover:bg-secondary/80 disabled:opacity-40 flex items-center gap-1"
+          className="bg-[#1a1025] text-accent border border-[#2a1545] font-pixel text-[12px] px-4 py-3 rounded-sm hover:bg-[#2a1545] disabled:opacity-40 flex items-center gap-1 transition-all hover:shadow-[0_0_15px_rgba(167,139,250,0.3)]"
         >
-          <Shuffle size={10} /> ?
+          <Shuffle size={14} />
         </button>
       </div>
-
-      {/* Refine toggle */}
+      
       {lastPrompt && (
-        <button
-          onClick={() => setShowRefine(v => !v)}
-          className="flex items-center gap-1 text-[8px] font-mono text-muted-foreground hover:text-foreground self-start"
-        >
-          {showRefine ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
-          {showRefine ? 'Hide refine' : 'Refine sprite…'}
-        </button>
-      )}
-
-      {/* Refine panel */}
-      {showRefine && lastPrompt && (
-        <div className="flex flex-col gap-1.5 border border-border/50 rounded-sm p-2 bg-background/40">
-          <div className="text-[8px] font-mono text-muted-foreground truncate">
-            Base: <span className="text-foreground/60 italic">{lastPrompt.slice(0, 50)}{lastPrompt.length > 50 ? '…' : ''}</span>
-          </div>
-          <textarea
-            value={refineText}
-            onChange={e => setRefineText(e.target.value)}
-            onKeyDown={onRefineKey}
-            placeholder='"add bells to hat" or "make it red and gold"'
-            className="w-full h-12 bg-input border border-border rounded-sm p-2 text-xs font-mono text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:border-primary"
-            disabled={isGenerating}
-          />
+        <div className="mt-2 flex flex-col gap-2">
           <button
-            onClick={handleRefine}
-            disabled={!refineText.trim() || isGenerating}
-            className="bg-primary/80 text-primary-foreground font-pixel text-[10px] py-1.5 rounded-sm hover:bg-primary disabled:opacity-40 flex items-center justify-center gap-1.5"
+            onClick={() => setShowRefine(!showRefine)}
+            className="flex items-center justify-center gap-1 text-[9px] font-pixel text-muted-foreground hover:text-foreground py-1 bg-[#111118] border border-[#1a1a24] rounded-sm transition-colors"
           >
-            <Wand2 size={10} /> REFINE
+            {showRefine ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+            Refine last generation
           </button>
+          
+          {showRefine && (
+            <div className="flex flex-col gap-2 p-2 bg-[#111118] border border-[#1a1a24] rounded-sm">
+              <input
+                value={refineText}
+                onChange={e => setRefineText(e.target.value)}
+                placeholder="Make it darker, add blood..."
+                className="bg-[#0a0a0e] border border-[#1a1a24] p-2 text-xs font-mono focus:outline-none focus:border-primary/50 text-foreground"
+              />
+              <button 
+                onClick={() => { setPrompt(lastPrompt + ", " + refineText); handleGenerate(); }}
+                disabled={!refineText || isGenerating}
+                className="bg-[#2a1545] text-accent font-pixel text-[9px] py-2 rounded-sm hover:bg-[#3a1d5c] transition-colors"
+              >
+                REFINE
+              </button>
+            </div>
+          )}
         </div>
       )}
-
-      {/* Keyword hints */}
-      <div className="text-[8px] font-mono text-muted-foreground leading-relaxed">
-        jester · wizard · knight · dragon · slime · skeleton · chest · mushroom · tree
-        <br />
-        + red · blue · gold · walking animation · isometric
-      </div>
     </div>
   );
 };

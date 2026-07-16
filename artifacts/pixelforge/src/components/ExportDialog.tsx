@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { encodeGif } from '../lib/gifEncoder';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface ExportDialogProps {
   editor: ReturnType<typeof usePixelEditor>;
@@ -114,60 +115,65 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ editor, open, onOpen
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] bg-card border-border text-foreground font-sans rounded-none">
+      <DialogContent className="sm:max-w-[425px] bg-[#0d0d12] border-[#2a1545] text-foreground font-sans rounded-none shadow-[0_0_50px_rgba(124,58,237,0.15)]">
         <DialogHeader>
-          <DialogTitle className="font-pixel text-sm text-primary uppercase">
-            Export Options
+          <DialogTitle className="font-pixel text-[12px] text-primary uppercase tracking-widest drop-shadow-[0_0_8px_rgba(124,58,237,0.5)]">
+            Export Ritual
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-6 py-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-mono text-muted-foreground">Export Scale ({scale}x)</label>
+          <div className="flex flex-col gap-3">
+            <label className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider">Scale ({scale}x)</label>
             <div className="flex gap-2">
               {[1, 2, 4, 8, 16].map(s => (
                 <button
                   key={s}
                   onClick={() => setScale(s)}
-                  className={`flex-1 py-1 font-mono text-xs border ${scale === s ? 'bg-primary border-primary text-white' : 'bg-muted border-transparent text-muted-foreground'}`}
+                  className={cn(
+                    "flex-1 py-1.5 font-mono text-[10px] border rounded-sm transition-all",
+                    scale === s 
+                      ? "bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(124,58,237,0.3)]" 
+                      : "bg-[#111118] border-[#1a1a24] text-muted-foreground hover:border-[#2a1545] hover:text-foreground"
+                  )}
                 >
                   {s}x
                 </button>
               ))}
             </div>
-            <div className="text-[10px] text-muted-foreground font-mono mt-1">
-              Result size: {project.width * scale} x {project.height * scale}
+            <div className="text-[10px] text-muted-foreground font-mono mt-1 text-center bg-[#111118] border border-[#1a1a24] py-1 rounded-sm">
+              Resolution: <span className="text-foreground">{project.width * scale} × {project.height * scale}</span> px
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <button 
               onClick={exportPNG} disabled={isExporting}
-              className="bg-muted hover:bg-muted/80 border border-border p-4 flex flex-col items-center gap-2 justify-center transition-colors"
+              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
             >
-              <ImageIcon size={24} className="text-primary" />
-              <span className="font-pixel text-[8px] uppercase">Current Frame (PNG)</span>
+              <ImageIcon size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Current Frame (PNG)</span>
             </button>
             <button 
               onClick={exportSpritesheet} disabled={isExporting}
-              className="bg-muted hover:bg-muted/80 border border-border p-4 flex flex-col items-center gap-2 justify-center transition-colors"
+              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
             >
-              <Layers size={24} className="text-secondary" />
-              <span className="font-pixel text-[8px] uppercase">Sprite Sheet</span>
+              <Layers size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Sprite Sheet</span>
             </button>
             <button 
               onClick={exportGIF} disabled={isExporting}
-              className="bg-muted hover:bg-muted/80 border border-border p-4 flex flex-col items-center gap-2 justify-center transition-colors"
+              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
             >
-              <Film size={24} className="text-accent" />
-              <span className="font-pixel text-[8px] uppercase">Animated GIF</span>
+              <Film size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Animated GIF</span>
             </button>
             <button 
               onClick={exportJSON} disabled={isExporting}
-              className="bg-muted hover:bg-muted/80 border border-border p-4 flex flex-col items-center gap-2 justify-center transition-colors"
+              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
             >
-              <Download size={24} className="text-foreground" />
-              <span className="font-pixel text-[8px] uppercase">Project (.PXF)</span>
+              <Download size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Project (.PXF)</span>
             </button>
           </div>
         </div>

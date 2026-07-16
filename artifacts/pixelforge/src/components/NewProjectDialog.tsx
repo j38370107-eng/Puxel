@@ -27,72 +27,72 @@ export const NewProjectDialog: React.FC<Props> = ({ onConfirm, onCancel }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+      className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
       onClick={onCancel}
     >
       <div
-        className="bg-card border-2 border-primary max-w-md w-full p-6 shadow-[0_0_60px_rgba(172,50,50,0.25)]"
+        className="bg-[#0d0d12] border border-[#2a1545] max-w-md w-full p-6 shadow-[0_0_60px_rgba(124,58,237,0.25)] rounded-sm"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="font-pixel text-primary text-sm uppercase mb-5 text-center">New Project</h2>
+        <h2 className="font-pixel text-primary text-sm uppercase mb-6 text-center tracking-widest drop-shadow-[0_0_8px_rgba(124,58,237,0.5)]">New Canvas</h2>
 
         {/* Canvas Size */}
-        <div className="mb-5">
-          <div className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider mb-2">Canvas Size</div>
+        <div className="mb-6">
+          <div className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider mb-3">Canvas Size</div>
           <div className="grid grid-cols-4 gap-2">
             {SIZE_PRESETS.map((s, i) => (
               <button
                 key={s.label}
                 onClick={() => setSizeIdx(i)}
                 className={cn(
-                  'flex flex-col items-center py-2 px-1 border rounded-sm transition-colors',
+                  'flex flex-col items-center py-3 px-1 border rounded-sm transition-all',
                   sizeIdx === i
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'bg-muted border-border text-muted-foreground hover:border-primary/50'
+                    ? 'bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(124,58,237,0.3)]'
+                    : 'bg-[#111118] border-[#1a1a24] text-muted-foreground hover:border-[#2a1545] hover:text-foreground'
                 )}
               >
-                <span className="font-pixel text-[9px]">{s.label}</span>
-                <span className="font-mono text-[8px] opacity-70 mt-0.5">{s.desc}</span>
+                <span className="font-pixel text-[8px] tracking-wider mb-1">{s.label}</span>
+                <span className="font-mono text-[9px] opacity-70 mt-0.5">{s.desc}</span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Mode */}
-        <div className="mb-6">
-          <div className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider mb-2">Mode</div>
+        <div className="mb-8">
+          <div className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider mb-3">Mode</div>
           <div className="flex gap-2">
             {MODES.map(m => (
               <button
                 key={m.id}
                 onClick={() => setMode(m.id)}
                 className={cn(
-                  'flex-1 flex flex-col items-center py-2 border rounded-sm transition-colors',
+                  'flex-1 flex flex-col items-center py-3 border rounded-sm transition-all',
                   mode === m.id
-                    ? 'bg-primary/20 border-primary text-white'
-                    : 'bg-muted border-border text-muted-foreground hover:border-primary/40'
+                    ? 'bg-accent/20 border-accent text-accent shadow-[0_0_10px_rgba(167,139,250,0.3)]'
+                    : 'bg-[#111118] border-[#1a1a24] text-muted-foreground hover:border-[#2a1545] hover:text-foreground'
                 )}
               >
-                <span className="font-pixel text-[9px] uppercase">{m.label}</span>
-                <span className="font-mono text-[8px] opacity-60 mt-0.5">{m.desc}</span>
+                <span className="font-pixel text-[8px] uppercase tracking-wider mb-1">{m.label}</span>
+                <span className="font-mono text-[9px] opacity-60 mt-0.5">{m.desc}</span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-2 font-mono text-xs border border-border text-muted-foreground hover:bg-muted rounded-sm transition-colors"
+            className="flex-1 py-3 font-mono text-xs border border-[#1a1a24] bg-[#111118] text-muted-foreground hover:bg-[#1a1a24] hover:text-foreground rounded-sm transition-colors"
           >
-            Cancel
+            CANCEL
           </button>
           <button
             onClick={() => onConfirm(w, h, mode)}
-            className="flex-1 py-2 bg-primary text-primary-foreground font-pixel text-[10px] uppercase hover:bg-primary/90 rounded-sm transition-colors"
+            className="flex-1 py-3 bg-primary text-primary-foreground font-pixel text-[10px] uppercase hover:bg-primary/90 rounded-sm transition-all shadow-[0_0_15px_rgba(124,58,237,0.3)] hover:shadow-[0_0_20px_rgba(124,58,237,0.5)] tracking-widest"
           >
-            Create {w}×{h}
+            CREATE
           </button>
         </div>
       </div>
