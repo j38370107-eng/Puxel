@@ -1,0 +1,36 @@
+Build and redesign PixelForge Pro as a highly advanced AI-powered Pixel Art Studio for game development, inspired by tools like PixelLab and games like Blasphemous.
+
+**UI/UX Redesign (AI-Heavy Focus):**
+- Top navigation: AI Studio (default/home), Character Creator, Map & World Editor, Animation Studio, Titles & UI, Models Library, Settings.
+- Prominent left sidebar for tools, right sidebar for AI prompt panel, layers, palette, properties.
+- Large central canvas with checkerboard background.
+- Bottom timeline for animations and quick model previews.
+- Dark gothic/retro theme with purple accents. Make AI generation the central, easiest feature.
+
+**Core Features:**
+- Canvas sizes: 16x16, 32x32, 64x64 (and larger), with easy selector.
+- Full pixel editor tools: pencil, eraser, flood fill, shapes, eyedropper, layers, onion skinning.
+- Palette control: 16-color, 32-color, 64-color modes + custom + gothic/dark presets.
+- Animation system: Frame timeline, playback, sprite sheet export, multi-frame generation.
+- Tilemap/Map Editor: Stamps, auto-tiling, large world building.
+- Models Library: Save, load, browse, search characters, objects, maps, animations with thumbnails. Full edit (manual or AI).
+
+**Advanced AI System (Main Focus - Make it Very Smart):**
+- Powerful text-to-pixel-art generator that creates detailed, game-ready assets like Blasphemous (dark gothic, intricate details, dramatic shading, atmospheric horror/religious style).
+- Excellent prompt understanding: "Blasphemous style hooded penitent warrior with sword and cloak, detailed shading, front view", "dark gothic cathedral interior map tileset", "boss monster animation idle and attack".
+- Step-by-step artist-like generation: silhouette → base colors → details → shading → polish.
+- Consistent character/style support (use last generation or reference image as style guide).
+- Regional editing: Select area + prompt to modify only that part.
+- Image upload: Drag & drop photo/reference → AI converts to high-quality pixel art model in chosen style.
+- Humanizer button/toggle: Adds subtle hand-crafted imperfections, noise, and variation so art looks artistic and avoids AI detectors while staying crisp.
+- Presets: Blasphemous Style, Retro 8-bit, 16-bit, Isometric, etc.
+- Generate animations automatically (idle, walk, attack, etc.).
+
+**Other Requirements:**
+- Save/Load everything as named models/projects.
+- Import image → pixelate + AI enhance.
+- Export: PNG, sprite sheets, GIF, JSON.
+- Keyboard shortcuts, undo/redo, zoom.
+- Make the AI as advanced and reliable as possible — it should accurately follow complex prompts and produce professional game assets.
+
+Start building the complete app with this design and capabilities. Test with a detailed Blasphemous-style character first.
