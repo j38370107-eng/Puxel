@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Play, Pause, Plus, Trash2 } from 'lucide-react';
+import { Play, Pause, Plus, Trash2, Copy } from 'lucide-react';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { cn } from '@/lib/utils';
 
@@ -12,10 +12,11 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
   const {
     project, activeFrameId, setActiveFrameId,
     isPlaying, setIsPlaying, fps, setFps,
-    addFrame, deleteFrame, onionSkin, setOnionSkin
+    addFrame, copyFrame, deleteFrame,
+    onionSkin, setOnionSkin,
   } = editor;
 
-  const thumbnailsRef = useRef<Record<string, string>>({});
+  const thumbnailsRef  = useRef<Record<string, string>>({});
   const renderCountRef = useRef(0);
 
   useEffect(() => {
@@ -27,23 +28,19 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
 
       for (const frame of project.frames) {
         ctx.clearRect(0, 0, width, height);
+        // Checkerboard background
         ctx.fillStyle = '#444';
         ctx.fillRect(0, 0, width, height);
         ctx.fillStyle = '#222';
-        for (let y = 0; y < height; y += 4) {
-          for (let x = 0; x < width; x += 4) {
+        for (let y = 0; y < height; y += 4)
+          for (let x = 0; x < width; x += 4)
             if ((x / 4 + y / 4) % 2 === 0) ctx.fillRect(x, y, 4, 4);
-          }
-        }
+
         for (const layer of [...frame.layers].reverse()) {
           if (!layer.visible || !layer.data) continue;
           await new Promise<void>(resolve => {
             const img = new Image();
-            img.onload = () => {
-              ctx.globalAlpha = layer.opacity;
-              ctx.drawImage(img, 0, 0);
-              resolve();
-            };
+            img.onload = () => { ctx.globalAlpha = layer.opacity; ctx.drawImage(img, 0, 0); resolve(); };
             img.src = layer.data;
           });
         }
@@ -57,21 +54,17 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
 
   useEffect(() => {
     if (!isPlaying) return;
-    const intervalId = setInterval(() => {
+    const id = setInterval(() => {
       setActiveFrameId(prev => {
         const idx = project.frames.findIndex(f => f.id === prev);
-        const nextIdx = (idx + 1) % project.frames.length;
-        return project.frames[nextIdx].id;
+        return project.frames[(idx + 1) % project.frames.length].id;
       });
     }, 1000 / fps);
-    return () => clearInterval(intervalId);
+    return () => clearInterval(id);
   }, [isPlaying, fps, project.frames, setActiveFrameId]);
 
   return (
-    <div className={cn(
-      'border-t border-border bg-card flex flex-col',
-      compact ? '' : 'h-40'
-    )}>
+    <div className={cn('border-t border-border bg-card flex flex-col', compact ? '' : 'h-40')}>
       {/* Controls */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-muted/30 gap-2 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
@@ -88,7 +81,7 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
             <span className="font-pixel text-[8px]">FPS</span>
             <input
               type="range" min="1" max="24" value={fps}
-              onChange={(e) => setFps(parseInt(e.target.value))}
+              onChange={e => setFps(parseInt(e.target.value))}
               className="w-20 accent-primary"
             />
             <span className="w-4">{fps}</span>
@@ -98,7 +91,7 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
             <input
               type="checkbox"
               checked={onionSkin}
-              onChange={(e) => setOnionSkin(e.target.checked)}
+              onChange={e => setOnionSkin(e.target.checked)}
               className="accent-primary"
             />
             ONION
@@ -107,10 +100,17 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
 
         <div className="flex items-center gap-1">
           <button
+            onClick={copyFrame}
+            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-white"
+            title="Duplicate Frame"
+          >
+            <Copy size={14} />
+          </button>
+          <button
             data-testid="frame-add"
             onClick={addFrame}
             className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-white"
-            title="New Frame"
+            title="New Empty Frame"
           >
             <Plus size={15} />
           </button>
@@ -156,6 +156,7 @@ export const AnimationTimeline: React.FC<AnimationTimelineProps> = ({ editor, co
         <button
           onClick={addFrame}
           className="w-14 h-14 border-2 border-dashed border-border rounded-sm flex items-center justify-center text-border hover:border-primary hover:text-primary transition-colors shrink-0"
+          title="Add frame"
         >
           <Plus size={20} />
         </button>

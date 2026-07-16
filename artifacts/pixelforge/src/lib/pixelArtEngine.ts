@@ -34,6 +34,7 @@ type Subject =
   | 'dragon' | 'slime' | 'skeleton' | 'ghost' | 'orc'
   | 'mushroom' | 'tree' | 'flower'
   | 'chest' | 'potion' | 'sword' | 'shield'
+  | 'isobox' | 'isotile'
   | 'humanoid';  // fallback
 
 type Expression = 'grin' | 'happy' | 'neutral' | 'stern' | 'angry';
@@ -993,6 +994,8 @@ export function parsePrompt(prompt: string): ParsedPrompt {
   if (p.includes('mushroom')) subject = 'mushroom';
   if (p.includes('tree') || p.includes('forest')) subject = 'tree';
   if (p.includes('chest') || p.includes('treasure')) subject = 'chest';
+  if (p.includes('isometric') || p.includes('iso tile') || p.includes('isotile')) subject = 'isobox';
+  if (p.includes('isometric grass') || p.includes('iso grass') || p.includes('isometric ground')) subject = 'isotile';
   if (p.includes('dragon')) subject = 'dragon';
   if (p.includes('slime') || p.includes('blob')) subject = 'slime';
   if (p.includes('skeleton')) subject = 'skeleton';
@@ -1063,6 +1066,8 @@ function resolveColours(parsed: ParsedPrompt): [RGBA, RGBA] {
     orc:      [hex('#558b2f'), hex('#795548')],
     mushroom: [hex('#f44336'), hex('#ffccbc')],
     tree:     [hex('#388e3c'), hex('#7a5230')],
+    isobox:   [hex('#7986cb'), hex('#9fa8da')],
+    isotile:  [hex('#66bb6a'), hex('#a5d6a7')],
     flower:   [hex('#f06292'), hex('#fff176')],
     chest:    [hex('#8b5e3c'), hex('#c0a030')],
     potion:   [hex('#9c27b0'), hex('#e1bee7')],
@@ -1100,8 +1105,86 @@ function drawSubject(p: PixelPainter, parsed: ParsedPrompt, main: RGBA, accent: 
     case 'mushroom':                 return drawMushroom(p, main, accent);
     case 'tree':                     return drawTree(p, main, accent);
     case 'chest':                    return drawChest(p, main, accent);
+    case 'isobox':                   return drawIsometricBox(p, main, accent);
+    case 'isotile':                  return drawIsometricTile(p, main, accent);
     default:                         return drawGenericHumanoid(p, main, accent, parsed.expression);
   }
+}
+
+// ── Isometric helpers ────────────────────────────────────────────────────────
+
+function isoShade(c: RGBA, factor: number): RGBA {
+  return [
+    Math.min(255, Math.round(c[0] * factor)),
+    Math.min(255, Math.round(c[1] * factor)),
+    Math.min(255, Math.round(c[2] * factor)),
+    c[3],
+  ];
+}
+
+/** Isometric crate / box sprite. Top face lightest, right face darkest. */
+function drawIsometricBox(p: PixelPainter, main: RGBA, _accent: RGBA): void {
+  const top   = isoShade(main, 1.4);
+  const left  = main;
+  const right = isoShade(main, 0.58);
+
+  // Top rhombus face (rows 4-13, centred at x=16, half-width expands 2px/row)
+  for (let row = 0; row < 5; row++) {
+    const hw = (row + 1) * 2;
+    p.rect(16 - hw, 4 + row, hw * 2, 1, top);
+  }
+  for (let row = 0; row < 5; row++) {
+    const hw = (4 - row) * 2;
+    if (hw <= 0) continue;
+    p.rect(16 - hw, 9 + row, hw * 2, 1, top);
+  }
+  // Left face
+  for (let row = 0; row < 12; row++) {
+    const x0 = 6 + Math.ceil(row * 0.5);
+    p.rect(x0, 12 + row, 16 - x0, 1, left);
+  }
+  // Right face
+  for (let row = 0; row < 12; row++) {
+    const x1 = 26 - Math.ceil(row * 0.5);
+    p.rect(16, 12 + row, x1 - 16, 1, right);
+  }
+  // Accent detail lines on left face
+  for (let row = 2; row < 11; row += 4) {
+    const x0 = 7 + Math.ceil(row * 0.5);
+    p.rect(x0, 12 + row, Math.max(1, 14 - x0), 1, isoShade(left, 0.75));
+  }
+}
+
+/** Flat isometric ground tile (grass / stone). */
+function drawIsometricTile(p: PixelPainter, main: RGBA, _accent: RGBA): void {
+  const top  = isoShade(main, 1.15);
+  const edL  = isoShade(main, 0.7);
+  const edR  = isoShade(main, 0.5);
+
+  // Top diamond (4px slab)
+  for (let row = 0; row < 5; row++) {
+    const hw = (row + 1) * 2;
+    p.rect(16 - hw, 10 + row, hw * 2, 1, top);
+  }
+  for (let row = 0; row < 5; row++) {
+    const hw = (4 - row) * 2;
+    if (hw <= 0) continue;
+    p.rect(16 - hw, 15 + row, hw * 2, 1, top);
+  }
+  // Left side drop (4px)
+  for (let row = 0; row < 4; row++) {
+    const x0 = 6 + Math.ceil((row + 4) * 0.5);
+    p.rect(x0, 19 + row, 16 - x0, 1, edL);
+  }
+  // Right side drop
+  for (let row = 0; row < 4; row++) {
+    const x1 = 26 - Math.ceil((row + 4) * 0.5);
+    p.rect(16, 19 + row, x1 - 16, 1, edR);
+  }
+  // Scatter dots
+  [[14, 11], [18, 13], [12, 14], [20, 12], [16, 16]].forEach(([x, y]) =>
+    p.rect(x, y, 1, 1, isoShade(main, 0.82))
+  );
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────

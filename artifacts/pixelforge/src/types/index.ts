@@ -1,5 +1,17 @@
-export type Tool = 'pencil' | 'eraser' | 'fill' | 'eyedropper' | 'line' | 'rect' | 'ellipse' | 'stamp';
+export type Tool =
+  | 'pencil' | 'eraser' | 'fill' | 'eyedropper'
+  | 'line' | 'rect' | 'ellipse'
+  | 'select' | 'move'
+  | 'stamp';
+
 export type Mode = 'sprite' | 'tilemap' | 'logo';
+
+export interface Selection {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
 
 export interface LayerData {
   id: string;
@@ -7,13 +19,13 @@ export interface LayerData {
   visible: boolean;
   locked: boolean;
   opacity: number;
-  data: string; // base64 PNG data
+  data: string; // base64 PNG
 }
 
 export interface FrameData {
   id: string;
   layers: LayerData[];
-  duration: number; // for GIF, e.g. 100ms
+  duration: number;
 }
 
 export interface ProjectData {

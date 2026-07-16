@@ -1,0 +1,35 @@
+Build a highly advanced Pixel Art AI Studio called "PixelForge Pro" — inspired by PixelLab, Piskel, and Aseprite, but with strong built-in AI capabilities.
+
+Core Requirements:
+- Modern, clean, dark UI with pixel-art aesthetic.
+- Full-featured pixel editor (32x32 default, support 16x16, 32x32, 64x64, 128x128) with tools: pencil, eraser, flood fill, line, shape, eyedropper, move, select, layers (multiple), onion skinning for animation.
+- Animation timeline with frame management, copy/paste frames, playback, export as GIF / sprite sheet.
+
+Advanced AI System (the main focus):
+- Powerful text-to-pixel-art generator that creates high-quality, game-ready assets.
+- When user types a prompt (e.g. "jester character", "medieval tavern map", "female elf archer walking animation", "cyberpunk title screen"), the AI must:
+  - Understand the request deeply (character, environment, UI element, animation).
+  - Generate in true pixel art style: crisp pixels, limited palette, proper shading, outlines, retro/8-bit or 16-bit feel.
+  - Create consistent characters (same style across multiple generations or frames).
+  - Support views: front, side, back, isometric.
+  - Generate multiple frames automatically for animations (idle, walk, attack, etc.).
+  - Handle maps/tile sets with repeatable tiles.
+
+- AI Techniques to implement:
+  - Step-by-step generation (silhouette → base colors → details → shading → polish).
+  - Style consistency engine (remember last generated style or use reference image).
+  - Inpainting / regional editing: select area + new prompt to edit only that part ("add bells to hat", "change outfit to red").
+  - Humanizer mode: automatically or on button press adds subtle hand-crafted imperfections (minor color noise, dithering, asymmetry) while keeping it clean and professional so it doesn't look obviously AI-generated.
+  - Palette control: auto or manual limited palettes (NES, Game Boy, custom).
+
+Additional Features:
+- Save / Load full projects and individual "Models" (sprites, characters, animations, tile sets) with thumbnails. Support editing saved models manually or with AI.
+- Import image → auto-pixelate + AI enhance.
+- Tilemap editor mode with stamp tools.
+- Export options: PNG, sprite sheet, animated GIF, JSON data.
+- "Surprise Me" and style presets (classic, modern pixel, isometric, etc.).
+- Keyboard shortcuts and responsive design.
+
+Make the AI generation as advanced as possible within browser limits (use smart procedural + rule-based algorithms if no external API). If possible, include hooks for future external AI API integration.
+
+Start by creating the full working application with excellent default AI generation. Test it with a jester character first — it should look detailed and professional.
