@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pencil, Eraser, PaintBucket, Pipette, Slash, Square, Circle, Stamp, Wand2, Wand } from 'lucide-react';
+import { Pencil, Eraser, PaintBucket, Pipette, Slash, Square, Circle, Stamp, Wand } from 'lucide-react';
 import { Tool } from '../types';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 interface ToolbarProps {
   editor: ReturnType<typeof usePixelEditor>;
   onHumanize: () => void;
+  layout?: 'vertical' | 'horizontal';
 }
 
-export const Toolbar: React.FC<ToolbarProps> = ({ editor, onHumanize }) => {
+export const Toolbar: React.FC<ToolbarProps> = ({ editor, onHumanize, layout = 'vertical' }) => {
   const { currentTool, setCurrentTool, project } = editor;
 
   const tools: { id: Tool; icon: React.FC<any>; label: string; shortcut: string }[] = [
@@ -27,42 +28,55 @@ export const Toolbar: React.FC<ToolbarProps> = ({ editor, onHumanize }) => {
     tools.push({ id: 'stamp', icon: Stamp, label: 'Tile Stamp', shortcut: 'S' });
   }
 
+  const isHorizontal = layout === 'horizontal';
+
   return (
-    <div className="flex flex-col gap-2 p-2 bg-card border-r border-border w-16 items-center py-4">
+    <div className={cn(
+      'flex items-center gap-1',
+      isHorizontal
+        ? 'flex-row px-2'
+        : 'flex-col gap-2 p-2 bg-card border-r border-border w-16 items-center py-4'
+    )}>
       {tools.map(tool => (
         <Tooltip key={tool.id}>
           <TooltipTrigger asChild>
             <button
+              data-testid={`tool-${tool.id}`}
               onClick={() => setCurrentTool(tool.id)}
               className={cn(
-                "w-10 h-10 flex items-center justify-center rounded-sm transition-colors border",
-                currentTool === tool.id 
-                  ? "bg-primary text-primary-foreground border-primary shadow-[0_0_10px_rgba(172,50,50,0.5)]" 
-                  : "bg-muted text-muted-foreground border-transparent hover:bg-muted/80 hover:text-foreground"
+                'flex items-center justify-center rounded-sm transition-colors border shrink-0',
+                isHorizontal ? 'w-11 h-11' : 'w-10 h-10',
+                currentTool === tool.id
+                  ? 'bg-primary text-primary-foreground border-primary shadow-[0_0_10px_rgba(172,50,50,0.5)]'
+                  : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80 hover:text-foreground active:bg-muted/60'
               )}
             >
-              <tool.icon size={20} strokeWidth={2} />
+              <tool.icon size={isHorizontal ? 20 : 18} strokeWidth={2} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="font-pixel text-[8px] flex items-center gap-2">
+          <TooltipContent side={isHorizontal ? 'top' : 'right'} className="font-pixel text-[8px] flex items-center gap-2">
             {tool.label} <span className="text-muted-foreground bg-muted px-1 rounded">{tool.shortcut}</span>
           </TooltipContent>
         </Tooltip>
       ))}
 
-      <div className="w-8 h-[1px] bg-border my-2" />
+      <div className={cn('bg-border shrink-0', isHorizontal ? 'w-[1px] h-8 mx-1' : 'w-8 h-[1px] my-2')} />
 
       <Tooltip>
         <TooltipTrigger asChild>
           <button
+            data-testid="tool-humanize"
             onClick={onHumanize}
-            className="w-10 h-10 flex items-center justify-center rounded-sm transition-colors border bg-accent/20 text-accent border-accent/30 hover:bg-accent hover:text-white"
+            className={cn(
+              'flex items-center justify-center rounded-sm transition-colors border bg-accent/20 text-accent border-accent/30 hover:bg-accent hover:text-white active:opacity-80 shrink-0',
+              isHorizontal ? 'w-11 h-11' : 'w-10 h-10'
+            )}
           >
-            <Wand size={20} strokeWidth={2} />
+            <Wand size={isHorizontal ? 20 : 18} strokeWidth={2} />
           </button>
         </TooltipTrigger>
-        <TooltipContent side="right" className="font-pixel text-[8px]">
-          Humanize (Add imperfections)
+        <TooltipContent side={isHorizontal ? 'top' : 'right'} className="font-pixel text-[8px]">
+          Humanize
         </TooltipContent>
       </Tooltip>
     </div>

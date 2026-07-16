@@ -1,16 +1,15 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { pixelEngine } from '../lib/pixelEngine';
-import { humanizer } from '../lib/humanizer';
 
 interface PixelCanvasProps {
   editor: ReturnType<typeof usePixelEditor>;
 }
 
 export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
-  const { 
-    project, activeFrameId, activeLayerId, 
-    currentTool, fgColor, bgColor, zoom, setZoom, showGrid, onionSkin,
+  const {
+    project, activeFrameId, activeLayerId,
+    currentTool, fgColor, zoom, setZoom, showGrid, onionSkin,
     updateLayerData, saveHistory, setFgColor
   } = editor;
 
@@ -22,138 +21,160 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [lastPos, setLastPos] = useState<{x: number, y: number} | null>(null);
-  const [previewPoints, setPreviewPoints] = useState<{x: number, y: number}[]>([]);
-  const [startPos, setStartPos] = useState<{x: number, y: number} | null>(null);
+  const [lastPos, setLastPos] = useState<{ x: number; y: number } | null>(null);
+  const [previewPoints, setPreviewPoints] = useState<{ x: number; y: number }[]>([]);
+  const [startPos, setStartPos] = useState<{ x: number; y: number } | null>(null);
 
-  // Helper to load ImageData from dataUrl
+  // Multi-pointer tracking (for pinch-to-zoom & two-finger pan)
+  const pointerMapRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const lastPinchDistRef = useRef<number | null>(null);
+  const lastPinchMidRef = useRef<{ x: number; y: number } | null>(null);
+  const spaceHeldRef = useRef(false);
+
+  // Stable refs so pointer handlers don't go stale
+  const isPanningRef = useRef(false);
+  const isDrawingRef = useRef(false);
+  const lastPosRef = useRef<{ x: number; y: number } | null>(null);
+  const startPosRef = useRef<{ x: number; y: number } | null>(null);
+  const previewPointsRef = useRef<{ x: number; y: number }[]>([]);
+  const currentToolRef = useRef(currentTool);
+  const fgColorRef = useRef(fgColor);
+
+  useEffect(() => { isPanningRef.current = isPanning; }, [isPanning]);
+  useEffect(() => { isDrawingRef.current = isDrawing; }, [isDrawing]);
+  useEffect(() => { lastPosRef.current = lastPos; }, [lastPos]);
+  useEffect(() => { startPosRef.current = startPos; }, [startPos]);
+  useEffect(() => { previewPointsRef.current = previewPoints; }, [previewPoints]);
+  useEffect(() => { currentToolRef.current = currentTool; }, [currentTool]);
+  useEffect(() => { fgColorRef.current = fgColor; }, [fgColor]);
+
+  // Spacebar pan
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (e.code === 'Space' && !e.repeat && tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        e.preventDefault();
+        spaceHeldRef.current = true;
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') spaceHeldRef.current = false;
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, []);
+
   const loadLayerData = async (dataUrl: string, ctx: CanvasRenderingContext2D, width: number, height: number) => {
-    if (!dataUrl) {
-      ctx.clearRect(0, 0, width, height);
-      return;
-    }
+    if (!dataUrl) { ctx.clearRect(0, 0, width, height); return; }
     return new Promise<void>((resolve) => {
       const img = new Image();
-      img.onload = () => {
-        ctx.clearRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0);
-        resolve();
-      };
+      img.onload = () => { ctx.clearRect(0, 0, width, height); ctx.drawImage(img, 0, 0); resolve(); };
       img.src = dataUrl;
     });
   };
 
-  // Render everything to main canvas
+  // Composite render
   useEffect(() => {
     const render = async () => {
       if (!canvasRef.current) return;
       const ctx = canvasRef.current.getContext('2d');
       if (!ctx) return;
-      
       const { width, height } = project;
       canvasRef.current.width = width;
       canvasRef.current.height = height;
       ctx.clearRect(0, 0, width, height);
 
-      // Onion skin
       if (onionSkin) {
         const frameIndex = project.frames.findIndex(f => f.id === activeFrameId);
         if (frameIndex > 0) {
           const prevFrame = project.frames[frameIndex - 1];
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = width;
-          tempCanvas.height = height;
-          const tCtx = tempCanvas.getContext('2d')!;
-          
+          const tc = document.createElement('canvas');
+          tc.width = width; tc.height = height;
+          const tCtx = tc.getContext('2d')!;
           for (const layer of [...prevFrame.layers].reverse()) {
             if (!layer.visible) continue;
             tCtx.globalAlpha = layer.opacity;
             await loadLayerData(layer.data, tCtx, width, height);
             ctx.globalAlpha = 0.3;
-            ctx.drawImage(tempCanvas, 0, 0);
+            ctx.drawImage(tc, 0, 0);
           }
           ctx.globalAlpha = 1.0;
         }
       }
 
-      // Draw layers
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = width;
-      tempCanvas.height = height;
-      const tCtx = tempCanvas.getContext('2d')!;
-
+      const tc = document.createElement('canvas');
+      tc.width = width; tc.height = height;
+      const tCtx = tc.getContext('2d')!;
       for (const layer of [...activeFrame.layers].reverse()) {
         if (!layer.visible) continue;
         await loadLayerData(layer.data, tCtx, width, height);
         ctx.globalAlpha = layer.opacity;
-        ctx.drawImage(tempCanvas, 0, 0);
+        ctx.drawImage(tc, 0, 0);
       }
       ctx.globalAlpha = 1.0;
 
-      // Draw preview for line/rect/ellipse
       if (previewPoints.length > 0) {
         ctx.fillStyle = fgColor;
-        previewPoints.forEach(p => {
-          ctx.fillRect(p.x, p.y, 1, 1);
-        });
+        previewPoints.forEach(p => ctx.fillRect(p.x, p.y, 1, 1));
       }
     };
     render();
-  }, [project, activeFrameId, previewPoints, onionSkin, fgColor]);
+  }, [project, activeFrameId, previewPoints, onionSkin, fgColor, activeFrame.layers]);
 
-  // Convert mouse/touch event to canvas coordinates
-  const getEventPos = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent) => {
+  const getCanvasPos = useCallback((clientX: number, clientY: number) => {
     if (!canvasRef.current) return null;
     const rect = canvasRef.current.getBoundingClientRect();
-    let clientX, clientY;
-    
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = (e as React.MouseEvent).clientX;
-      clientY = (e as React.MouseEvent).clientY;
-    }
-
-    // Adjust for pan and zoom based on the CSS transform applied to the canvas container
-    // Since we apply transform: scale() and translate() on a wrapper, getBoundingClientRect() handles it!
     const x = Math.floor((clientX - rect.left) / (rect.width / project.width));
     const y = Math.floor((clientY - rect.top) / (rect.height / project.height));
-
     if (x < 0 || x >= project.width || y < 0 || y >= project.height) return null;
     return { x, y };
-  };
+  }, [project.width, project.height]);
 
-  const commitDrawing = async (points: {x: number, y: number}[], color: string) => {
+  const commitDrawing = useCallback(async (points: { x: number; y: number }[], color: string) => {
     if (!activeLayer || activeLayer.locked || !activeLayer.visible || points.length === 0) return;
-    
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = project.width;
-    tempCanvas.height = project.height;
-    const ctx = tempCanvas.getContext('2d')!;
-    
+    const tc = document.createElement('canvas');
+    tc.width = project.width; tc.height = project.height;
+    const ctx = tc.getContext('2d')!;
     await loadLayerData(activeLayer.data, ctx, project.width, project.height);
-    
-    ctx.fillStyle = color;
     if (color === 'erase') {
       points.forEach(p => ctx.clearRect(p.x, p.y, 1, 1));
     } else {
+      ctx.fillStyle = color;
       points.forEach(p => ctx.fillRect(p.x, p.y, 1, 1));
     }
+    updateLayerData(activeFrame.id, activeLayer.id, tc.toDataURL());
+  }, [activeLayer, activeFrame.id, project.width, project.height, updateLayerData]);
 
-    updateLayerData(activeFrame.id, activeLayer.id, tempCanvas.toDataURL());
-  };
+  const handlePointerDown = useCallback(async (e: React.PointerEvent) => {
+    // Capture so move/up fire even when pointer leaves element
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    pointerMapRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-  const handlePointerDown = async (e: React.MouseEvent | React.TouchEvent) => {
-    // Pan mode (Spacebar + Click or Middle Click)
-    if ((e as React.MouseEvent).button === 1 || ((e as any).nativeEvent instanceof MouseEvent && (e as any).nativeEvent.button === 1)) {
+    if (pointerMapRef.current.size >= 2) {
+      // Multi-touch: start pinch/pan, cancel any drawing
+      setIsDrawing(false);
+      setPreviewPoints([]);
+      const pts = Array.from(pointerMapRef.current.values());
+      const dx = pts[0].x - pts[1].x;
+      const dy = pts[0].y - pts[1].y;
+      lastPinchDistRef.current = Math.sqrt(dx * dx + dy * dy);
+      lastPinchMidRef.current = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      return;
+    }
+
+    // Middle mouse or spacebar = pan
+    if (e.button === 1 || spaceHeldRef.current) {
       setIsPanning(true);
       return;
     }
 
-    const pos = getEventPos(e);
+    const pos = getCanvasPos(e.clientX, e.clientY);
     if (!pos) return;
-    
+
     if (currentTool === 'eyedropper') {
       if (!canvasRef.current) return;
       const ctx = canvasRef.current.getContext('2d')!;
@@ -168,16 +189,12 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     if (currentTool === 'fill') {
       if (!activeLayer || activeLayer.locked || !activeLayer.visible) return;
       saveHistory();
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = project.width;
-      tempCanvas.height = project.height;
-      const ctx = tempCanvas.getContext('2d')!;
+      const tc = document.createElement('canvas');
+      tc.width = project.width; tc.height = project.height;
+      const ctx = tc.getContext('2d')!;
       await loadLayerData(activeLayer.data, ctx, project.width, project.height);
-      
       const points = pixelEngine.floodFill(ctx, pos.x, pos.y, fgColor);
-      if (points.length > 0) {
-        commitDrawing(points, fgColor);
-      }
+      if (points.length > 0) commitDrawing(points, fgColor);
       return;
     }
 
@@ -186,25 +203,49 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     setStartPos(pos);
     setLastPos(pos);
 
-    if (currentTool === 'pencil') {
-      commitDrawing([pos], fgColor);
-    } else if (currentTool === 'eraser') {
-      commitDrawing([pos], 'erase');
-    }
-  };
+    if (currentTool === 'pencil') commitDrawing([pos], fgColor);
+    else if (currentTool === 'eraser') commitDrawing([pos], 'erase');
+  }, [currentTool, fgColor, activeLayer, project.width, project.height, getCanvasPos, commitDrawing, saveHistory, setFgColor]);
 
-  const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (isPanning) {
-      const movementX = 'movementX' in e ? e.movementX : 0;
-      const movementY = 'movementY' in e ? e.movementY : 0;
-      if (movementX !== 0 || movementY !== 0) {
-        setPan(p => ({ x: p.x + movementX, y: p.y + movementY }));
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const prevXY = pointerMapRef.current.get(e.pointerId);
+    pointerMapRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    // Two-finger pinch/pan
+    if (pointerMapRef.current.size >= 2 && lastPinchDistRef.current !== null) {
+      const pts = Array.from(pointerMapRef.current.values());
+      const dx = pts[0].x - pts[1].x;
+      const dy = pts[0].y - pts[1].y;
+      const newDist = Math.sqrt(dx * dx + dy * dy);
+
+      // Zoom
+      if (lastPinchDistRef.current > 0) {
+        const ratio = newDist / lastPinchDistRef.current;
+        setZoom(z => Math.max(1, Math.min(32, z * ratio)));
       }
+      lastPinchDistRef.current = newDist;
+
+      // Pan (midpoint movement)
+      const newMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      if (lastPinchMidRef.current) {
+        const midDx = newMid.x - lastPinchMidRef.current.x;
+        const midDy = newMid.y - lastPinchMidRef.current.y;
+        setPan(p => ({ x: p.x + midDx, y: p.y + midDy }));
+      }
+      lastPinchMidRef.current = newMid;
+      return;
+    }
+
+    // Single pointer pan (middle click or space)
+    if (isPanning && prevXY) {
+      const mdx = e.clientX - prevXY.x;
+      const mdy = e.clientY - prevXY.y;
+      setPan(p => ({ x: p.x + mdx, y: p.y + mdy }));
       return;
     }
 
     if (!isDrawing || !startPos) return;
-    const pos = getEventPos(e);
+    const pos = getCanvasPos(e.clientX, e.clientY);
     if (!pos) return;
 
     if (currentTool === 'pencil' || currentTool === 'eraser') {
@@ -216,48 +257,49 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     } else if (currentTool === 'line') {
       setPreviewPoints(pixelEngine.drawLine(startPos.x, startPos.y, pos.x, pos.y));
     } else if (currentTool === 'rect') {
-      setPreviewPoints(pixelEngine.drawRect(startPos.x, startPos.y, pos.x, pos.y, false)); // outline only for now
+      setPreviewPoints(pixelEngine.drawRect(startPos.x, startPos.y, pos.x, pos.y, false));
     } else if (currentTool === 'ellipse') {
       setPreviewPoints(pixelEngine.drawEllipse(startPos.x, startPos.y, pos.x, pos.y, false));
     }
-  };
+  }, [isPanning, isDrawing, startPos, lastPos, currentTool, fgColor, getCanvasPos, commitDrawing, setZoom]);
 
-  const handlePointerUp = () => {
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    pointerMapRef.current.delete(e.pointerId);
+
+    if (pointerMapRef.current.size < 2) {
+      lastPinchDistRef.current = null;
+      lastPinchMidRef.current = null;
+    }
+
     if (isPanning) {
       setIsPanning(false);
       return;
     }
-    
+
     if (isDrawing && previewPoints.length > 0) {
       commitDrawing(previewPoints, fgColor);
       setPreviewPoints([]);
     }
-    
+
     setIsDrawing(false);
     setStartPos(null);
     setLastPos(null);
-  };
+  }, [isPanning, isDrawing, previewPoints, fgColor, commitDrawing]);
 
-  // Wheel zoom
   const handleWheel = (e: React.WheelEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      setZoom(z => Math.max(1, Math.min(32, z * zoomFactor)));
-    }
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.85 : 1.18;
+    setZoom(z => Math.max(1, Math.min(32, z * factor)));
   };
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className="flex-1 w-full h-full overflow-hidden bg-[#0d0d12] flex items-center justify-center relative select-none touch-none"
+      className="flex-1 w-full h-full overflow-hidden bg-[#0d0d12] flex items-center justify-center relative select-none"
+      style={{ touchAction: 'none' }}
       onWheel={handleWheel}
-      onMouseUp={handlePointerUp}
-      onMouseLeave={handlePointerUp}
-      onTouchEnd={handlePointerUp}
-      onTouchCancel={handlePointerUp}
     >
-      <div 
+      <div
         className="relative shadow-[0_0_50px_rgba(0,0,0,0.5)]"
         style={{
           width: project.width,
@@ -265,24 +307,24 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           transformOrigin: 'center center',
           imageRendering: 'pixelated',
-          cursor: isPanning ? 'grab' : currentTool === 'eyedropper' ? 'crosshair' : 'crosshair'
+          cursor: isPanning ? 'grab' : 'crosshair',
         }}
-        onMouseDown={handlePointerDown}
-        onMouseMove={handlePointerMove}
-        onTouchStart={handlePointerDown}
-        onTouchMove={handlePointerMove}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
-        {/* Checkerboard background */}
-        <div 
+        {/* Checkerboard transparency */}
+        <div
           className="absolute inset-0 opacity-20 pointer-events-none"
           style={{
             backgroundImage: `repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%)`,
             backgroundSize: '2px 2px',
           }}
         />
-        
+
         {/* Main Canvas */}
-        <canvas 
+        <canvas
           ref={canvasRef}
           className="absolute inset-0 z-10 w-full h-full"
           style={{ imageRendering: 'pixelated' }}
@@ -290,24 +332,21 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
 
         {/* Grid Overlay */}
         {showGrid && (
-          <div 
+          <div
             className="absolute inset-0 z-20 pointer-events-none"
             style={{
-              backgroundImage: `
-                linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px)
-              `,
+              backgroundImage: `linear-gradient(to right, rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.1) 1px, transparent 1px)`,
               backgroundSize: '1px 1px',
               width: '100%',
-              height: '100%'
+              height: '100%',
             }}
           />
         )}
       </div>
-      
+
       {/* HUD */}
-      <div className="absolute bottom-4 right-4 text-xs font-pixel text-white/50 pointer-events-none">
-        {project.width}x{project.height} | Zoom {Math.round(zoom * 100)}%
+      <div className="absolute bottom-2 right-2 text-[9px] font-pixel text-white/40 pointer-events-none leading-tight">
+        {project.width}x{project.height} | {Math.round(zoom * 100)}%
       </div>
     </div>
   );

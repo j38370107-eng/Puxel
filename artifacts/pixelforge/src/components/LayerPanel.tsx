@@ -1,20 +1,19 @@
 import React from 'react';
-import { Layers, Eye, EyeOff, Lock, Unlock, Plus, Trash2, Copy, ArrowUp, ArrowDown } from 'lucide-react';
+import { Layers, Eye, EyeOff, Lock, Unlock, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { cn } from '@/lib/utils';
 
 interface LayerPanelProps {
   editor: ReturnType<typeof usePixelEditor>;
+  compact?: boolean;
 }
 
-export const LayerPanel: React.FC<LayerPanelProps> = ({ editor }) => {
+export const LayerPanel: React.FC<LayerPanelProps> = ({ editor, compact = false }) => {
   const { project, activeFrameId, activeLayerId, setActiveLayerId, setProject, saveHistory } = editor;
 
   const frameIndex = project.frames.findIndex(f => f.id === activeFrameId);
   if (frameIndex === -1) return null;
   const frame = project.frames[frameIndex];
-  
-  // We reverse for display so top layer is at top of list
   const displayLayers = [...frame.layers].reverse();
 
   const updateLayer = (id: string, updates: Partial<typeof frame.layers[0]>) => {
@@ -64,7 +63,6 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({ editor }) => {
     if (idx < 0) return;
     if (dir === 1 && idx === frame.layers.length - 1) return;
     if (dir === -1 && idx === 0) return;
-    
     saveHistory();
     setProject(p => {
       const newFrames = [...p.frames];
@@ -78,46 +76,55 @@ export const LayerPanel: React.FC<LayerPanelProps> = ({ editor }) => {
   };
 
   return (
-    <div className="flex flex-col h-1/2 border-b border-border bg-card">
+    <div className={cn(
+      'flex flex-col border-b border-border bg-card',
+      compact ? '' : 'h-1/2'
+    )}>
       <div className="flex items-center justify-between p-2 border-b border-border text-[10px] font-pixel text-muted-foreground uppercase tracking-wider">
         <div className="flex items-center gap-2">
           <Layers size={14} /> Layers
         </div>
-        <div className="flex gap-1">
-          <button onClick={addLayer} className="p-1 hover:bg-muted rounded text-foreground"><Plus size={14}/></button>
-        </div>
+        <button
+          data-testid="layer-add"
+          onClick={addLayer}
+          className="p-1 hover:bg-muted rounded text-foreground"
+        >
+          <Plus size={14} />
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
         {displayLayers.map((layer) => (
-          <div 
+          <div
             key={layer.id}
+            data-testid={`layer-${layer.id}`}
             className={cn(
-              "flex items-center gap-2 p-2 rounded text-xs border transition-colors cursor-pointer",
-              activeLayerId === layer.id ? "bg-primary/20 border-primary text-white" : "bg-muted border-transparent hover:border-muted-foreground/30 text-muted-foreground"
+              'flex items-center gap-2 p-2 rounded text-xs border transition-colors cursor-pointer',
+              compact ? 'py-3' : '',
+              activeLayerId === layer.id
+                ? 'bg-primary/20 border-primary text-white'
+                : 'bg-muted border-transparent hover:border-muted-foreground/30 text-muted-foreground'
             )}
             onClick={() => setActiveLayerId(layer.id)}
           >
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); updateLayer(layer.id, { visible: !layer.visible }); }}
-              className="text-muted-foreground hover:text-white"
+              className="text-muted-foreground hover:text-white shrink-0 p-0.5"
             >
               {layer.visible ? <Eye size={14} /> : <EyeOff size={14} className="opacity-50" />}
             </button>
-            <button 
+            <button
               onClick={(e) => { e.stopPropagation(); updateLayer(layer.id, { locked: !layer.locked }); }}
-              className="text-muted-foreground hover:text-white"
+              className="text-muted-foreground hover:text-white shrink-0 p-0.5"
             >
               {layer.locked ? <Lock size={14} /> : <Unlock size={14} className="opacity-50" />}
             </button>
-            
             <span className="flex-1 font-mono truncate">{layer.name}</span>
-            
             {activeLayerId === layer.id && (
-              <div className="flex items-center gap-1 opacity-50 hover:opacity-100">
-                <button onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 1); }}><ArrowUp size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, -1); }}><ArrowDown size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); deleteLayer(layer.id); }} className="text-destructive"><Trash2 size={12} /></button>
+              <div className="flex items-center gap-1 opacity-60 hover:opacity-100">
+                <button onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, 1); }} className="p-0.5"><ArrowUp size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); moveLayer(layer.id, -1); }} className="p-0.5"><ArrowDown size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); deleteLayer(layer.id); }} className="text-destructive p-0.5"><Trash2 size={12} /></button>
               </div>
             )}
           </div>
