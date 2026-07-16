@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "PixelForge"
+version = "1.0.0"
+id = "artifacts/pixelforge"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19571
+
+[services.development]
+run = "pnpm --filter @workspace/pixelforge run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pixelforge", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/pixelforge/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19571"
+BASE_PATH = "/"
