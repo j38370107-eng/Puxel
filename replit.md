@@ -1,6 +1,6 @@
-# [Project name]
+# PixelForge
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A browser-based pixel art editor with layers, animation timeline, and an AI sprite generator.
 
 ## Run & Operate
 
