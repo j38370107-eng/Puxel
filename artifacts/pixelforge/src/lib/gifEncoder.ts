@@ -17,7 +17,7 @@ export const encodeGif = async (frames: { dataUrl: string, duration: number }[],
       quality: 10,
       width,
       height,
-      transparent: 0x000000 // we can set transparent color
+      transparent: '0x000000' // we can set transparent color
     });
 
     let loadedFrames = 0;
