@@ -94,7 +94,7 @@ export const AIGenerator: React.FC<AIGeneratorProps> = ({ editor }) => {
   const [showRefine, setShowRefine]       = useState(false);
   const [styleId, setStyleId]             = useState<StylePreset>('blasphemous');
   const [frameCount, setFrameCount]       = useState<number>(1);
-  const [paletteSize, setPaletteSize]     = useState<16 | 32 | 64>(32);
+  const [paletteSize, setPaletteSize]     = useState<16 | 32 | 64>(16);
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   const [refImgName, setRefImgName]       = useState<string>('');
 
@@ -175,11 +175,11 @@ export const AIGenerator: React.FC<AIGeneratorProps> = ({ editor }) => {
           project.height,
         );
         // Generate a sprite and composite over reference
-        const generated = generateSprite(finalPrompt, project.width, project.height, styleId, frameCount);
+        const generated = generateSprite(finalPrompt, project.width, project.height, styleId, frameCount, paletteSize);
         // Use reference image as base but apply style
         frames = frameCount > 1 ? generated : [refImgData];
       } else {
-        frames = generateSprite(finalPrompt, project.width, project.height, styleId, frameCount);
+        frames = generateSprite(finalPrompt, project.width, project.height, styleId, frameCount, paletteSize);
       }
 
       clearTimers();

@@ -2434,31 +2434,12 @@ export function parsePrompt(prompt: string, stylePreset: StylePreset = 'none'): 
   const seed = hashString(prompt);
 
   let subject: Subject = 'humanoid';
-  for (const [word, subj] of Object.entries(SUBJECT_MAP)) {
-    if (p.includes(word)) { subject = subj; break; }
-  }
 
-  // Priority overrides (more specific subjects)
-  if (p.includes('mushroom')) subject = 'mushroom';
-  if (p.includes('tree') || p.includes('forest')) subject = 'tree';
-  if (p.includes('chest') || p.includes('treasure')) subject = 'chest';
-  if (p.includes('isometric') || p.includes('iso tile') || p.includes('isotile')) subject = 'isobox';
-  if (p.includes('isometric grass') || p.includes('iso grass') || p.includes('isometric ground')) subject = 'isotile';
-  if (p.includes('dragon')) subject = 'dragon';
-  if (p.includes('slime') || p.includes('blob')) subject = 'slime';
-  if (p.includes('skeleton')) subject = 'skeleton';
-  if (p.includes('goblin')) subject = 'goblin';
-  if (p.includes('vampire') || p.includes('dracula')) subject = 'vampire';
-  if (p.includes('witch') || p.includes(' hag')) subject = 'witch';
-  if (p.includes('demon') || p.includes('devil') || p.includes('fiend')) subject = 'demon';
-  if (p.includes('angel') || p.includes('seraph')) subject = 'angel';
-  if (p.includes('reaper')) subject = 'reaper';
-  if (p.includes('zombie')) subject = 'zombie';
-  if (p.includes('wolf') || p.includes('werewolf')) subject = 'wolf';
-  if (p.includes('spider')) subject = 'spider';
-  if (p.includes(' bat') || p.startsWith('bat')) subject = 'bat';
-  if (p.includes('gargoyle')) subject = 'gargoyle';
-  if (p.includes('coin')) subject = 'coin';
+  // ── Priority tiers: ITEMS first (lowest priority), CHARACTERS last (highest) ──
+  // Later checks override earlier ones, so characters always beat items.
+
+  // Tier 1 – items / props (lowest priority)
+  if (p.includes('coin') || p.includes('gold coin')) subject = 'coin';
   if (p.includes(' key') || p.startsWith('key')) subject = 'key';
   if (p.includes('torch') || p.includes('lantern')) subject = 'torch';
   if (p.includes('bomb') || p.includes('explosive')) subject = 'bomb';
@@ -2473,9 +2454,45 @@ export function parsePrompt(prompt: string, stylePreset: StylePreset = 'none'): 
   if (p.includes(' axe') || p.startsWith('axe') || p.includes('hatchet')) subject = 'axe';
   if (p.includes(' staff') || p.startsWith('staff') || p.includes(' wand') || p.includes('scepter')) subject = 'staff';
   if (p.includes('potion') || p.includes(' vial') || p.includes(' flask') || p.includes('elixir')) subject = 'potion';
-  if (p.includes('sword') || p.includes('longsword') || p.includes('katana')) subject = 'sword';
+  if (p.includes('sword') || p.includes('longsword') || p.includes('katana') || p.includes(' blade')) subject = 'sword';
   if (p.includes('shield') || p.includes('buckler')) subject = 'shield';
   if (p.includes('flower') || p.includes(' rose') || p.includes('daisy')) subject = 'flower';
+
+  // Tier 2 – environment / scenery
+  if (p.includes('isometric') || p.includes('iso tile') || p.includes('isotile')) subject = 'isobox';
+  if (p.includes('isometric grass') || p.includes('iso grass') || p.includes('isometric ground')) subject = 'isotile';
+  if (p.includes('chest') || p.includes('treasure')) subject = 'chest';
+  if (p.includes('mushroom') || p.includes('shroom')) subject = 'mushroom';
+  if (p.includes('tree') || p.includes('forest')) subject = 'tree';
+  if (p.includes('rock') || p.includes('boulder')) subject = 'rock';
+
+  // Tier 3 – creatures / monsters
+  if (p.includes('slime') || p.includes('blob')) subject = 'slime';
+  if (p.includes('skeleton') || p.includes('bones')) subject = 'skeleton';
+  if (p.includes('dragon') || p.includes('drake') || p.includes('wyvern')) subject = 'dragon';
+  if (p.includes('spider') || p.includes('arachnid')) subject = 'spider';
+  if (p.includes(' bat') || p.startsWith('bat')) subject = 'bat';
+  if (p.includes('gargoyle')) subject = 'gargoyle';
+  if (p.includes('wolf') || p.includes('werewolf') || p.includes('hound')) subject = 'wolf';
+
+  // Tier 4 – named characters (highest priority — always beat items)
+  if (p.includes('zombie') || p.includes('undead')) subject = 'zombie';
+  if (p.includes('goblin') || p.includes('imp')) subject = 'goblin';
+  if (p.includes('vampire') || p.includes('dracula') || p.includes('nosferatu')) subject = 'vampire';
+  if (p.includes('witch') || p.includes(' hag')) subject = 'witch';
+  if (p.includes('demon') || p.includes('devil') || p.includes('fiend')) subject = 'demon';
+  if (p.includes('angel') || p.includes('seraph') || p.includes('cherub')) subject = 'angel';
+  if (p.includes('reaper')) subject = 'reaper';
+  if (p.includes('elf')) subject = 'elf';
+  if (p.includes('orc')) subject = 'warrior';
+  if (p.includes('ghost')) subject = 'humanoid';
+  if (p.includes('archer') || p.includes('ranger') || p.includes('hunter')) subject = 'archer';
+  if (p.includes('rogue') || p.includes('thief') || p.includes('assassin')) subject = 'rogue';
+  if (p.includes('warrior') || p.includes('fighter') || p.includes('barbarian')) subject = 'warrior';
+  if (p.includes('knight') || p.includes('paladin') || p.includes('crusader')) subject = 'knight';
+  if (p.includes('mage') || p.includes('sorcerer') || p.includes('warlock') || p.includes('magician')) subject = 'mage';
+  if (p.includes('wizard')) subject = 'wizard';
+  if (p.includes('jester') || p.includes('fool') || p.includes('harlequin')) subject = 'jester';
 
   let expression: Expression = 'neutral';
   if (subject === 'jester') expression = 'grin';
@@ -2696,11 +2713,54 @@ function drawIsometricTile(p: PixelPainter, main: RGBA, _accent: RGBA): void {
   );
 }
 
+// ─── Palette Quantization ─────────────────────────────────────────────────────
+
+/**
+ * Reduce an ImageData to at most `maxColors` distinct colors using frequency-
+ * based selection followed by nearest-palette remapping. Transparent pixels are
+ * left untouched. This keeps hard color edges — essential for pixel art.
+ */
+function quantizeToNColors(img: ImageData, maxColors: number): ImageData {
+  const d = new Uint8ClampedArray(img.data);
+  const w = img.width, h = img.height;
+
+  // Count color frequencies (ignore alpha < 128)
+  const freq = new Map<string, { count: number; rgba: RGBA }>();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    // Quantize to 4-bit depth per channel first to bucket nearby shades
+    const r = d[i] & 0xf0, g = d[i + 1] & 0xf0, b = d[i + 2] & 0xf0;
+    const key = `${r},${g},${b}`;
+    const existing = freq.get(key);
+    if (existing) { existing.count++; }
+    else { freq.set(key, { count: 1, rgba: [d[i], d[i + 1], d[i + 2], d[i + 3]] }); }
+  }
+
+  if (freq.size <= maxColors) return img; // already within budget
+
+  // Pick top-N most-used colors as the palette
+  const palette: RGBA[] = [...freq.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, maxColors)
+    .map(e => e.rgba);
+
+  // Remap every opaque pixel to its nearest palette entry
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 128) continue;
+    const c: RGBA = [d[i], d[i + 1], d[i + 2], d[i + 3]];
+    const mapped = nearestPalette(c, palette);
+    d[i] = mapped[0]; d[i + 1] = mapped[1]; d[i + 2] = mapped[2];
+  }
+
+  return new ImageData(d, w, h);
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Generate one or more pixel-art frames from a text prompt.
  * Returns an array of ImageData (length = parsed.frames or frameCountOverride).
+ * @param maxColors - palette cap applied after generation (default 16)
  */
 export function generateSprite(
   prompt: string,
@@ -2708,6 +2768,7 @@ export function generateSprite(
   height: number,
   style: StylePreset = 'none',
   frameCountOverride?: number,
+  maxColors = 16,
 ): ImageData[] {
   const parsed = parsePrompt(prompt, style);
   const [main, accent] = resolveColours(parsed);
@@ -2721,7 +2782,8 @@ export function generateSprite(
     if (parsed.animated && frameCount > 1) applyWalkOffset(p, f);
     p.outline();
     const humanized = humanize(p.toImageData(), 0.5, new SeededRNG(parsed.seed ^ (f * 0x9e3779b9)));
-    results.push(applyStylePost(humanized, style, new SeededRNG(parsed.seed ^ 0xdeadbeef)));
+    const styled = applyStylePost(humanized, style, new SeededRNG(parsed.seed ^ 0xdeadbeef));
+    results.push(quantizeToNColors(styled, maxColors));
   }
 
   return results;
