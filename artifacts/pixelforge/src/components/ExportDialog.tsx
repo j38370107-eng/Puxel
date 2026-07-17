@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Image as ImageIcon, Layers, Film } from 'lucide-react';
+import { Download, Image as ImageIcon, Layers, Film, FileJson, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { encodeGif } from '../lib/gifEncoder';
@@ -14,57 +14,48 @@ interface ExportDialogProps {
 
 export const ExportDialog: React.FC<ExportDialogProps> = ({ editor, open, onOpenChange }) => {
   const { project, activeFrameId } = editor;
-  const [scale, setScale] = useState(1);
+  const [scale, setScale]           = useState(4);
   const [isExporting, setIsExporting] = useState(false);
+  const [progress, setProgress]       = useState('');
 
-  const getCompositeCanvas = async (frameId: string, exportScale: number = 1): Promise<HTMLCanvasElement> => {
+  const getCompositeCanvas = async (frameId: string, s: number): Promise<HTMLCanvasElement> => {
     const frame = project.frames.find(f => f.id === frameId);
     const canvas = document.createElement('canvas');
-    canvas.width = project.width * exportScale;
-    canvas.height = project.height * exportScale;
+    canvas.width  = project.width  * s;
+    canvas.height = project.height * s;
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
-
     if (!frame) return canvas;
-
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = project.width;
-    tempCanvas.height = project.height;
-    const tCtx = tempCanvas.getContext('2d')!;
-
+    const temp = document.createElement('canvas');
+    temp.width  = project.width;
+    temp.height = project.height;
+    const tCtx = temp.getContext('2d')!;
     for (const layer of [...frame.layers].reverse()) {
       if (!layer.visible || !layer.data) continue;
       await new Promise<void>(resolve => {
         const img = new Image();
-        img.onload = () => {
-          tCtx.globalAlpha = layer.opacity;
-          tCtx.drawImage(img, 0, 0);
-          resolve();
-        };
+        img.onload = () => { tCtx.globalAlpha = layer.opacity; tCtx.drawImage(img, 0, 0); resolve(); };
+        img.onerror = () => resolve();
         img.src = layer.data;
       });
     }
-
-    ctx.drawImage(tempCanvas, 0, 0, project.width, project.height, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(temp, 0, 0, project.width, project.height, 0, 0, canvas.width, canvas.height);
     return canvas;
   };
 
-  const downloadURL = (url: string, filename: string) => {
+  const download = (url: string, filename: string) => {
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    a.href = url; a.download = filename; a.click();
   };
 
   const exportPNG = async () => {
-    setIsExporting(true);
+    setIsExporting(true); setProgress('Rendering frame...');
     try {
       const canvas = await getCompositeCanvas(activeFrameId, scale);
-      downloadURL(canvas.toDataURL('image/png'), `${project.name}.png`);
-      toast.success('Exported PNG');
-    } finally {
-      setIsExporting(false);
-    }
+      download(canvas.toDataURL('image/png'), `${project.name}.png`);
+      toast.success('PNG exported!');
+    } catch { toast.error('Export failed'); }
+    finally { setIsExporting(false); setProgress(''); }
   };
 
   const exportSpritesheet = async () => {
@@ -73,109 +64,110 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ editor, open, onOpen
       const w = project.width * scale;
       const h = project.height * scale;
       const canvas = document.createElement('canvas');
-      canvas.width = w * project.frames.length;
+      canvas.width  = w * project.frames.length;
       canvas.height = h;
       const ctx = canvas.getContext('2d')!;
-
       for (let i = 0; i < project.frames.length; i++) {
-        const frameCanvas = await getCompositeCanvas(project.frames[i].id, scale);
-        ctx.drawImage(frameCanvas, i * w, 0);
+        setProgress(`Rendering frame ${i + 1} / ${project.frames.length}...`);
+        const fc = await getCompositeCanvas(project.frames[i].id, scale);
+        ctx.drawImage(fc, i * w, 0);
       }
-      downloadURL(canvas.toDataURL('image/png'), `${project.name}_spritesheet.png`);
-      toast.success('Exported Spritesheet');
-    } finally {
-      setIsExporting(false);
-    }
+      download(canvas.toDataURL('image/png'), `${project.name}_sheet.png`);
+      toast.success('Sprite sheet exported!');
+    } catch { toast.error('Export failed'); }
+    finally { setIsExporting(false); setProgress(''); }
   };
 
   const exportGIF = async () => {
-    setIsExporting(true);
+    setIsExporting(true); setProgress('Encoding GIF...');
     try {
       const frames = [];
-      for (const f of project.frames) {
-        const c = await getCompositeCanvas(f.id, scale);
-        frames.push({ dataUrl: c.toDataURL('image/png'), duration: f.duration || 100 });
+      for (let i = 0; i < project.frames.length; i++) {
+        setProgress(`Rendering frame ${i + 1} / ${project.frames.length}...`);
+        const c = await getCompositeCanvas(project.frames[i].id, scale);
+        frames.push({ dataUrl: c.toDataURL('image/png'), duration: project.frames[i].duration || 100 });
       }
-      const gifUrl = await encodeGif(frames, project.width * scale, project.height * scale);
-      downloadURL(gifUrl, `${project.name}.gif`);
-      toast.success('Exported GIF');
-    } catch (e) {
-      toast.error('GIF Export failed. Check console for details.');
-      console.error(e);
-    } finally {
-      setIsExporting(false);
-    }
+      const url = await encodeGif(frames, project.width * scale, project.height * scale);
+      download(url, `${project.name}.gif`);
+      toast.success('GIF exported!');
+    } catch { toast.error('GIF export failed'); }
+    finally { setIsExporting(false); setProgress(''); }
   };
 
   const exportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(project));
-    downloadURL(dataStr, `${project.name}.pxf`);
-    toast.success('Exported Project JSON');
+    const data = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(project, null, 2));
+    download(data, `${project.name}.pxf`);
+    toast.success('Project JSON exported!');
   };
 
+  const exportOpts = [
+    { icon: ImageIcon, label: 'Current Frame', sub: 'PNG · single frame', onClick: exportPNG },
+    { icon: Layers,    label: 'Sprite Sheet',  sub: `PNG · ${project.frames.length} frame${project.frames.length !== 1 ? 's' : ''} horizontal`, onClick: exportSpritesheet },
+    { icon: Film,      label: 'Animated GIF',  sub: `GIF · ${project.frames.length} frame${project.frames.length !== 1 ? 's' : ''}`, onClick: exportGIF },
+    { icon: FileJson,  label: 'Project File',  sub: '.pxf JSON — full save', onClick: exportJSON },
+  ];
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px] bg-[#0d0d12] border-[#2a1545] text-foreground font-sans rounded-none shadow-[0_0_50px_rgba(124,58,237,0.15)]">
+    <Dialog open={open} onOpenChange={isExporting ? undefined : onOpenChange}>
+      <DialogContent className="sm:max-w-[420px] bg-card border-primary/30 text-foreground font-sans rounded-none shadow-[0_0_60px_rgba(124,58,237,0.2)]">
         <DialogHeader>
-          <DialogTitle className="font-pixel text-[12px] text-primary uppercase tracking-widest drop-shadow-[0_0_8px_rgba(124,58,237,0.5)]">
-            Export Ritual
+          <DialogTitle className="font-pixel text-[11px] text-primary uppercase tracking-widest glow-purple flex items-center gap-2">
+            <Download size={13} /> Export
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-6 py-4">
-          <div className="flex flex-col gap-3">
-            <label className="text-[9px] font-pixel text-muted-foreground uppercase tracking-wider">Scale ({scale}x)</label>
-            <div className="flex gap-2">
+        <div className="flex flex-col gap-5 py-2">
+          {/* Scale selector */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-pixel text-[8px] text-muted-foreground uppercase tracking-wider">Scale</span>
+              <span className="font-mono text-[10px] text-foreground/60">
+                → {project.width * scale} × {project.height * scale} px
+              </span>
+            </div>
+            <div className="flex gap-1.5">
               {[1, 2, 4, 8, 16].map(s => (
                 <button
                   key={s}
                   onClick={() => setScale(s)}
                   className={cn(
-                    "flex-1 py-1.5 font-mono text-[10px] border rounded-sm transition-all",
-                    scale === s 
-                      ? "bg-primary/20 border-primary text-primary shadow-[0_0_10px_rgba(124,58,237,0.3)]" 
-                      : "bg-[#111118] border-[#1a1a24] text-muted-foreground hover:border-[#2a1545] hover:text-foreground"
+                    'flex-1 py-2 font-pixel text-[8px] border transition-all',
+                    scale === s
+                      ? 'bg-primary/20 border-primary text-primary shadow-[0_0_8px_rgba(124,58,237,0.3)]'
+                      : 'bg-muted/20 border-border/40 text-muted-foreground hover:border-primary/30 hover:text-foreground'
                   )}
                 >
-                  {s}x
+                  {s}×
                 </button>
               ))}
             </div>
-            <div className="text-[10px] text-muted-foreground font-mono mt-1 text-center bg-[#111118] border border-[#1a1a24] py-1 rounded-sm">
-              Resolution: <span className="text-foreground">{project.width * scale} × {project.height * scale}</span> px
-            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={exportPNG} disabled={isExporting}
-              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
-            >
-              <ImageIcon size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Current Frame (PNG)</span>
-            </button>
-            <button 
-              onClick={exportSpritesheet} disabled={isExporting}
-              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
-            >
-              <Layers size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Sprite Sheet</span>
-            </button>
-            <button 
-              onClick={exportGIF} disabled={isExporting}
-              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
-            >
-              <Film size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Animated GIF</span>
-            </button>
-            <button 
-              onClick={exportJSON} disabled={isExporting}
-              className="group bg-[#111118] hover:bg-primary/10 border border-[#1a1a24] hover:border-primary/50 p-4 flex flex-col items-center gap-3 justify-center transition-all rounded-sm"
-            >
-              <Download size={24} className="text-muted-foreground group-hover:text-primary transition-colors" />
-              <span className="font-pixel text-[8px] uppercase text-muted-foreground group-hover:text-primary transition-colors">Project (.PXF)</span>
-            </button>
+          {/* Export options */}
+          <div className="grid grid-cols-2 gap-2">
+            {exportOpts.map(opt => (
+              <button
+                key={opt.label}
+                onClick={opt.onClick}
+                disabled={isExporting}
+                className="group flex flex-col items-start gap-2 p-3 bg-muted/20 border border-border/40 hover:border-primary/50 hover:bg-primary/5 transition-all disabled:opacity-40"
+              >
+                <opt.icon size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />
+                <div>
+                  <p className="font-pixel text-[8px] text-foreground/80 group-hover:text-primary transition-colors">{opt.label}</p>
+                  <p className="font-mono text-[9px] text-muted-foreground/60 mt-0.5">{opt.sub}</p>
+                </div>
+              </button>
+            ))}
           </div>
+
+          {/* Progress */}
+          {isExporting && progress && (
+            <div className="flex items-center gap-2 text-[9px] font-pixel text-primary animate-pulse bg-primary/10 border border-primary/20 px-3 py-2">
+              <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+              {progress}
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

@@ -5,13 +5,10 @@ import { Selection } from '../types';
 
 interface PixelCanvasProps {
   editor: ReturnType<typeof usePixelEditor>;
+  onCursorMove?: (pos: { x: number; y: number } | null) => void;
 }
 
-// Expand a single point to a NxN brush block
-function brushPoints(
-  cx: number, cy: number, size: number,
-  w: number, h: number
-): { x: number; y: number }[] {
+function brushPoints(cx: number, cy: number, size: number, w: number, h: number) {
   if (size <= 1) return [{ x: cx, y: cy }];
   const r = Math.floor(size / 2);
   const pts: { x: number; y: number }[] = [];
@@ -28,7 +25,6 @@ function brushPoints(
   return pts;
 }
 
-// Shift all pixels in an ImageData by (dx, dy) with wrap-around
 function shiftImageData(src: ImageData, dx: number, dy: number): ImageData {
   const w = src.width, h = src.height;
   const dst = new ImageData(w, h);
@@ -47,7 +43,7 @@ function shiftImageData(src: ImageData, dx: number, dy: number): ImageData {
   return dst;
 }
 
-export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
+export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor, onCursorMove }) => {
   const {
     project, activeFrameId, activeLayerId,
     currentTool, fgColor, zoom, setZoom, showGrid, onionSkin,
@@ -55,8 +51,9 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     updateLayerData, saveHistory, setFgColor,
   } = editor;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef    = useRef<HTMLCanvasElement>(null);
+  const containerRef  = useRef<HTMLDivElement>(null);
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const overlayRef    = useRef<HTMLCanvasElement>(null);
 
   const activeFrame = project.frames.find(f => f.id === activeFrameId) || project.frames[0];
   const activeLayer = activeFrame.layers.find(l => l.id === activeLayerId);
@@ -68,24 +65,20 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
   const [previewPoints, setPreviewPoints] = useState<{ x: number; y: number }[]>([]);
   const [startPos, setStartPos]     = useState<{ x: number; y: number } | null>(null);
 
-  // Selection dragging
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [selStart, setSelStart]       = useState<{ x: number; y: number } | null>(null);
+  const [isSelecting, setIsSelecting]     = useState(false);
+  const [selStart, setSelStart]           = useState<{ x: number; y: number } | null>(null);
   const [liveSelection, setLiveSelection] = useState<Selection | null>(null);
 
-  // Move tool
   const [isMoveActive, setIsMoveActive]   = useState(false);
   const [moveStart, setMoveStart]         = useState<{ x: number; y: number } | null>(null);
   const [moveOffset, setMoveOffset]       = useState<{ x: number; y: number } | null>(null);
   const moveSnapshotRef = useRef<string>('');
 
-  // Multi-pointer
   const pointerMapRef      = useRef<Map<number, { x: number; y: number }>>(new Map());
   const lastPinchDistRef   = useRef<number | null>(null);
   const lastPinchMidRef    = useRef<{ x: number; y: number } | null>(null);
   const spaceHeldRef       = useRef(false);
 
-  // Stable refs for pointer handlers
   const isPanningRef    = useRef(false);
   const isDrawingRef    = useRef(false);
   const lastPosRef      = useRef<{ x: number; y: number } | null>(null);
@@ -95,6 +88,7 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
   const fgColorRef      = useRef(fgColor);
   const brushSizeRef    = useRef(brushSize);
   const zoomRef         = useRef(zoom);
+  const panRef          = useRef(pan);
 
   useEffect(() => { isPanningRef.current = isPanning; }, [isPanning]);
   useEffect(() => { isDrawingRef.current = isDrawing; }, [isDrawing]);
@@ -105,20 +99,26 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
   useEffect(() => { fgColorRef.current = fgColor; }, [fgColor]);
   useEffect(() => { brushSizeRef.current = brushSize; }, [brushSize]);
   useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { panRef.current = pan; }, [pan]);
 
-  // Spacebar pan
+  // Space to pan
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (e.code === 'Space' && !e.repeat && tag !== 'INPUT' && tag !== 'TEXTAREA') {
         e.preventDefault(); spaceHeldRef.current = true;
       }
-      if (e.key === 'Escape') { setSelection(null); setLiveSelection(null); setSelStart(null); }
+      if (e.key === 'Escape') {
+        setSelection(null); setLiveSelection(null); setSelStart(null);
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => { if (e.code === 'Space') spaceHeldRef.current = false; };
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
-    return () => { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); };
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
   }, [setSelection]);
 
   const loadLayerData = async (dataUrl: string, ctx: CanvasRenderingContext2D, w: number, h: number) => {
@@ -141,6 +141,7 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
       canvasRef.current.height = height;
       ctx.clearRect(0, 0, width, height);
 
+      // Onion skin
       if (onionSkin) {
         const fi = project.frames.findIndex(f => f.id === activeFrameId);
         if (fi > 0) {
@@ -152,13 +153,14 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
             if (!layer.visible) continue;
             tCtx.globalAlpha = layer.opacity;
             await loadLayerData(layer.data, tCtx, width, height);
-            ctx.globalAlpha = 0.3;
+            ctx.globalAlpha = 0.25;
             ctx.drawImage(tc, 0, 0);
           }
           ctx.globalAlpha = 1.0;
         }
       }
 
+      // Active frame layers
       const tc = document.createElement('canvas');
       tc.width = width; tc.height = height;
       const tCtx = tc.getContext('2d')!;
@@ -166,7 +168,6 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
         if (!layer.visible) continue;
         await loadLayerData(layer.data, tCtx, width, height);
         ctx.globalAlpha = layer.opacity;
-        // Apply move offset preview if active
         if (moveOffset && layer.id === activeLayerId) {
           ctx.drawImage(tc, moveOffset.x, moveOffset.y);
         } else {
@@ -175,6 +176,7 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
       }
       ctx.globalAlpha = 1.0;
 
+      // Preview pixels
       if (previewPoints.length > 0) {
         ctx.fillStyle = fgColor;
         previewPoints.forEach(p => ctx.fillRect(p.x, p.y, 1, 1));
@@ -183,18 +185,61 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     render();
   }, [project, activeFrameId, previewPoints, onionSkin, fgColor, activeFrame.layers, moveOffset, activeLayerId]);
 
+  // Overlay: grid + selection
+  useEffect(() => {
+    if (!overlayRef.current || !canvasRef.current) return;
+    const w = project.width;
+    const h = project.height;
+    const displayW = w * zoom;
+    const displayH = h * zoom;
+    overlayRef.current.width  = displayW;
+    overlayRef.current.height = displayH;
+    const ctx = overlayRef.current.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, displayW, displayH);
+
+    // Grid
+    if (showGrid && zoom >= 4) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 0.5;
+      for (let x = 0; x <= w; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * zoom, 0);
+        ctx.lineTo(x * zoom, displayH);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= h; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * zoom);
+        ctx.lineTo(displayW, y * zoom);
+        ctx.stroke();
+      }
+    }
+
+    // Selection
+    const sel = liveSelection || selection;
+    if (sel) {
+      ctx.strokeStyle = 'rgba(124,58,237,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(sel.x * zoom, sel.y * zoom, sel.w * zoom, sel.h * zoom);
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(124,58,237,0.08)';
+      ctx.fillRect(sel.x * zoom, sel.y * zoom, sel.w * zoom, sel.h * zoom);
+    }
+  }, [project.width, project.height, zoom, showGrid, selection, liveSelection]);
+
   const getCanvasPos = useCallback((clientX: number, clientY: number) => {
     if (!canvasRef.current) return null;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.floor((clientX - rect.left) / (rect.width  / project.width));
-    const y = Math.floor((clientY - rect.top)  / (rect.height / project.height));
+    const x = Math.floor((clientX - rect.left) / (rect.width / project.width));
+    const y = Math.floor((clientY - rect.top) / (rect.height / project.height));
     if (x < 0 || x >= project.width || y < 0 || y >= project.height) return null;
     return { x, y };
   }, [project.width, project.height]);
 
   const commitDrawing = useCallback(async (points: { x: number; y: number }[], color: string) => {
     if (!activeLayer || activeLayer.locked || !activeLayer.visible || points.length === 0) return;
-    // Expand by brush size
     const expanded: { x: number; y: number }[] = [];
     const seen = new Set<string>();
     for (const pt of points) {
@@ -224,9 +269,8 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     const ctx = tc.getContext('2d')!;
     await loadLayerData(moveSnapshotRef.current || activeLayer.data, ctx, project.width, project.height);
     const imgData = ctx.getImageData(0, 0, project.width, project.height);
-    const shifted = shiftImageData(imgData, dx, dy);
     ctx.clearRect(0, 0, project.width, project.height);
-    ctx.putImageData(shifted, 0, 0);
+    ctx.putImageData(shiftImageData(imgData, dx, dy), 0, 0);
     updateLayerData(activeFrame.id, activeLayer.id, tc.toDataURL());
   }, [activeLayer, activeFrame.id, project.width, project.height, updateLayerData]);
 
@@ -250,25 +294,15 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
 
     const tool = toolRef.current;
 
-    // Select tool
     if (tool === 'select') {
-      setIsSelecting(true);
-      setSelStart(pos);
-      setLiveSelection({ x: pos.x, y: pos.y, w: 1, h: 1 });
-      return;
+      setIsSelecting(true); setSelStart(pos);
+      setLiveSelection({ x: pos.x, y: pos.y, w: 1, h: 1 }); return;
     }
-
-    // Move tool
     if (tool === 'move') {
       if (!activeLayer || activeLayer.locked) return;
-      setIsMoveActive(true);
-      setMoveStart(pos);
-      setMoveOffset({ x: 0, y: 0 });
-      moveSnapshotRef.current = activeLayer.data;
-      saveHistory();
-      return;
+      setIsMoveActive(true); setMoveStart(pos); setMoveOffset({ x: 0, y: 0 });
+      moveSnapshotRef.current = activeLayer.data; saveHistory(); return;
     }
-
     if (tool === 'eyedropper') {
       if (!canvasRef.current) return;
       const ctx = canvasRef.current.getContext('2d')!;
@@ -278,7 +312,6 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
       }
       return;
     }
-
     if (tool === 'fill') {
       if (!activeLayer || activeLayer.locked || !activeLayer.visible) return;
       saveHistory();
@@ -292,10 +325,7 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     }
 
     saveHistory();
-    setIsDrawing(true);
-    setStartPos(pos);
-    setLastPos(pos);
-
+    setIsDrawing(true); setStartPos(pos); setLastPos(pos);
     if (tool === 'pencil') commitDrawing(brushPoints(pos.x, pos.y, brushSizeRef.current, project.width, project.height), fgColorRef.current);
     else if (tool === 'eraser') commitDrawing(brushPoints(pos.x, pos.y, brushSizeRef.current, project.width, project.height), 'erase');
   }, [activeLayer, project.width, project.height, getCanvasPos, commitDrawing, saveHistory, setFgColor]);
@@ -304,193 +334,153 @@ export const PixelCanvas: React.FC<PixelCanvasProps> = ({ editor }) => {
     const prevXY = pointerMapRef.current.get(e.pointerId);
     pointerMapRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
+    // Report cursor position
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    onCursorMove?.(pos);
+
+    // Pinch zoom
     if (pointerMapRef.current.size >= 2 && lastPinchDistRef.current !== null) {
       const pts = Array.from(pointerMapRef.current.values());
       const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
       const newDist = Math.sqrt(dx * dx + dy * dy);
-      if (lastPinchDistRef.current > 0) setZoom(z => Math.max(1, Math.min(32, z * (newDist / lastPinchDistRef.current!))));
+      if (lastPinchDistRef.current > 0) {
+        setZoom(z => Math.max(1, Math.min(32, z * (newDist / lastPinchDistRef.current!))));
+      }
       lastPinchDistRef.current = newDist;
-      const newMid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-      if (lastPinchMidRef.current) setPan(p => ({ x: p.x + newMid.x - lastPinchMidRef.current!.x, y: p.y + newMid.y - lastPinchMidRef.current!.y }));
-      lastPinchMidRef.current = newMid;
       return;
     }
 
-    if (isPanning && prevXY) {
+    // Pan
+    if (isPanningRef.current && prevXY) {
       setPan(p => ({ x: p.x + e.clientX - prevXY.x, y: p.y + e.clientY - prevXY.y }));
       return;
     }
 
-    // Selection drag
-    if (isSelecting && selStart) {
-      const pos = getCanvasPos(e.clientX, e.clientY);
-      if (pos) {
-        const x = Math.min(selStart.x, pos.x);
-        const y = Math.min(selStart.y, pos.y);
-        const w = Math.abs(pos.x - selStart.x) + 1;
-        const h = Math.abs(pos.y - selStart.y) + 1;
-        setLiveSelection({ x, y, w, h });
-      }
-      return;
-    }
-
-    // Move drag
-    if (isMoveActive && moveStart) {
-      const pos = getCanvasPos(e.clientX, e.clientY);
-      if (pos) {
-        const dx = pos.x - moveStart.x;
-        const dy = pos.y - moveStart.y;
-        setMoveOffset({ x: dx, y: dy });
-      }
-      return;
-    }
-
-    if (!isDrawing || !startPos) return;
-    const pos = getCanvasPos(e.clientX, e.clientY);
     if (!pos) return;
 
+    // Select drag
+    if (isSelecting && selStart) {
+      const x = Math.min(pos.x, selStart.x);
+      const y = Math.min(pos.y, selStart.y);
+      const w = Math.abs(pos.x - selStart.x) + 1;
+      const h = Math.abs(pos.y - selStart.y) + 1;
+      setLiveSelection({ x, y, w, h }); return;
+    }
+
+    // Move tool
+    if (isMoveActive && moveStart) {
+      const dx = pos.x - moveStart.x, dy = pos.y - moveStart.y;
+      setMoveOffset({ x: dx, y: dy }); return;
+    }
+
+    if (!isDrawingRef.current) return;
     const tool = toolRef.current;
-    if (tool === 'pencil' || tool === 'eraser') {
-      if (lastPos && (lastPos.x !== pos.x || lastPos.y !== pos.y)) {
-        const linePoints = pixelEngine.drawLine(lastPos.x, lastPos.y, pos.x, pos.y);
-        commitDrawing(linePoints, tool === 'pencil' ? fgColorRef.current : 'erase');
-        setLastPos(pos);
+    const sp = startPosRef.current;
+
+    if (tool === 'pencil') {
+      if (lastPosRef.current) {
+        const line = pixelEngine.drawLine(lastPosRef.current.x, lastPosRef.current.y, pos.x, pos.y);
+        commitDrawing(line, fgColorRef.current);
       }
-    } else if (tool === 'line') {
-      setPreviewPoints(pixelEngine.drawLine(startPos.x, startPos.y, pos.x, pos.y));
-    } else if (tool === 'rect') {
-      setPreviewPoints(pixelEngine.drawRect(startPos.x, startPos.y, pos.x, pos.y, false));
-    } else if (tool === 'ellipse') {
-      setPreviewPoints(pixelEngine.drawEllipse(startPos.x, startPos.y, pos.x, pos.y, false));
+      setLastPos(pos);
+    } else if (tool === 'eraser') {
+      if (lastPosRef.current) {
+        const line = pixelEngine.drawLine(lastPosRef.current.x, lastPosRef.current.y, pos.x, pos.y);
+        commitDrawing(line, 'erase');
+      }
+      setLastPos(pos);
+    } else if (sp) {
+      let pts: { x: number; y: number }[] = [];
+      if (tool === 'line')    pts = pixelEngine.drawLine(sp.x, sp.y, pos.x, pos.y);
+      if (tool === 'rect')    pts = pixelEngine.drawRect(sp.x, sp.y, pos.x, pos.y, false);
+      if (tool === 'ellipse') pts = pixelEngine.drawEllipse(sp.x, sp.y, pos.x, pos.y, false);
+      setPreviewPoints(pts);
     }
-  }, [isPanning, isSelecting, selStart, isMoveActive, moveStart, isDrawing, startPos, lastPos, getCanvasPos, commitDrawing, setZoom]);
+  }, [getCanvasPos, onCursorMove, isSelecting, selStart, isMoveActive, moveStart, commitDrawing, setZoom]);
 
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+  const handlePointerUp = useCallback(async (e: React.PointerEvent) => {
     pointerMapRef.current.delete(e.pointerId);
-    if (pointerMapRef.current.size < 2) {
-      lastPinchDistRef.current = null; lastPinchMidRef.current = null;
-    }
+    lastPinchDistRef.current = null;
 
-    // Finalize selection
+    if (isPanningRef.current) { setIsPanning(false); return; }
+
     if (isSelecting) {
       setIsSelecting(false);
-      if (liveSelection && liveSelection.w > 1 && liveSelection.h > 1) {
-        setSelection(liveSelection);
-      } else {
-        setSelection(null);
-      }
-      setLiveSelection(null);
-      setSelStart(null);
-      return;
+      setSelection(liveSelection); setLiveSelection(null); setSelStart(null); return;
     }
 
-    // Finalize move
     if (isMoveActive && moveOffset) {
-      commitMove(moveOffset.x, moveOffset.y);
-      setIsMoveActive(false);
-      setMoveOffset(null);
-      setMoveStart(null);
-      moveSnapshotRef.current = '';
-      return;
+      await commitMove(moveOffset.x, moveOffset.y);
+      setIsMoveActive(false); setMoveStart(null); setMoveOffset(null); return;
     }
 
-    if (isPanning) { setIsPanning(false); return; }
+    if (!isDrawingRef.current) return;
+    const sp = startPosRef.current;
+    const pos = getCanvasPos(e.clientX, e.clientY);
+    const tool = toolRef.current;
 
-    if (isDrawing && previewPoints.length > 0) {
-      commitDrawing(previewPoints, fgColorRef.current);
+    if (sp && pos && (tool === 'line' || tool === 'rect' || tool === 'ellipse')) {
+      let pts: { x: number; y: number }[] = [];
+      if (tool === 'line')    pts = pixelEngine.drawLine(sp.x, sp.y, pos.x, pos.y);
+      if (tool === 'rect')    pts = pixelEngine.drawRect(sp.x, sp.y, pos.x, pos.y, false);
+      if (tool === 'ellipse') pts = pixelEngine.drawEllipse(sp.x, sp.y, pos.x, pos.y, false);
+      await commitDrawing(pts, fgColorRef.current);
       setPreviewPoints([]);
     }
-    setIsDrawing(false);
-    setStartPos(null);
-    setLastPos(null);
-  }, [isPanning, isSelecting, liveSelection, setSelection, isMoveActive, moveOffset, commitMove, isDrawing, previewPoints, commitDrawing]);
 
-  const handleWheel = (e: React.WheelEvent) => {
+    setIsDrawing(false); setLastPos(null); setStartPos(null);
+  }, [isSelecting, liveSelection, isMoveActive, moveOffset, commitMove, getCanvasPos, commitDrawing, setSelection]);
+
+  const handlePointerLeave = useCallback(() => {
+    onCursorMove?.(null);
+  }, [onCursorMove]);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom(z => Math.max(1, Math.min(32, z * (e.deltaY > 0 ? 0.85 : 1.18))));
-  };
+    setZoom(z => Math.max(1, Math.min(32, z + (e.deltaY < 0 ? 1 : -1))));
+  }, [setZoom]);
 
-  // Cursor style
+  const displayW = project.width  * zoom;
+  const displayH = project.height * zoom;
+
   const cursor =
-    isPanning ? 'grab' :
+    currentTool === 'pencil'     ? 'crosshair' :
+    currentTool === 'eraser'     ? 'cell' :
     currentTool === 'eyedropper' ? 'crosshair' :
-    currentTool === 'select' ? 'crosshair' :
-    currentTool === 'move' ? (isMoveActive ? 'grabbing' : 'grab') :
+    currentTool === 'fill'       ? 'cell' :
+    currentTool === 'move'       ? 'move' :
+    currentTool === 'select'     ? 'default' :
     'crosshair';
-
-  // Displayed selection (committed or live)
-  const displaySel = isSelecting ? liveSelection : selection;
 
   return (
     <div
       ref={containerRef}
-      className="flex-1 w-full h-full overflow-hidden bg-[#0d0d12] flex items-center justify-center relative select-none"
-      style={{ touchAction: 'none' }}
+      className="w-full h-full flex items-center justify-center overflow-hidden"
       onWheel={handleWheel}
     >
       <div
-        className="relative shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+        className="relative"
         style={{
-          width: project.width,
-          height: project.height,
-          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-          transformOrigin: 'center center',
-          imageRendering: 'pixelated',
-          cursor,
+          width: displayW,
+          height: displayH,
+          transform: `translate(${pan.x}px, ${pan.y}px)`,
+          cursor: isPanning ? 'grabbing' : spaceHeldRef.current ? 'grab' : cursor,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
       >
-        {/* Checkerboard transparency */}
-        <div
-          className="absolute inset-0 opacity-20 pointer-events-none"
-          style={{
-            backgroundImage: `repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%)`,
-            backgroundSize: '2px 2px',
-          }}
-        />
-
-        {/* Main Canvas */}
+        {/* Pixel canvas */}
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 z-10 w-full h-full"
-          style={{ imageRendering: 'pixelated' }}
+          style={{ width: displayW, height: displayH, display: 'block', position: 'absolute', top: 0, left: 0 }}
         />
-
-        {/* Grid Overlay */}
-        {showGrid && (
-          <div
-            className="absolute inset-0 z-20 pointer-events-none"
-            style={{
-              backgroundImage: `linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)`,
-              backgroundSize: '1px 1px',
-            }}
-          />
-        )}
-
-        {/* Selection Overlay — in canvas-pixel space (within the scaled div) */}
-        {displaySel && displaySel.w > 0 && displaySel.h > 0 && (
-          <div
-            className="absolute z-30 pointer-events-none"
-            style={{
-              left: displaySel.x,
-              top: displaySel.y,
-              width: displaySel.w,
-              height: displaySel.h,
-              outline: '1px dashed rgba(255, 255, 255, 0.9)',
-              boxShadow: '0 0 0 1px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.3)',
-              background: 'rgba(100, 180, 255, 0.08)',
-            }}
-          />
-        )}
-      </div>
-
-      {/* HUD */}
-      <div className="absolute bottom-2 right-2 text-[9px] font-pixel text-white/40 pointer-events-none leading-tight text-right">
-        {project.width}×{project.height} | {Math.round(zoom * 100)}%
-        {displaySel && <div className="text-amber-400/60">{displaySel.w}×{displaySel.h} sel</div>}
+        {/* Grid / selection overlay */}
+        <canvas
+          ref={overlayRef}
+          style={{ width: displayW, height: displayH, display: 'block', position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}
+        />
       </div>
     </div>
   );

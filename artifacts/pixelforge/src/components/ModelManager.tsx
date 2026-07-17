@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Upload, Trash2, FolderOpen, Save, Plus } from 'lucide-react';
-import { useListProjects, useDeleteProject, useGetProject } from '@workspace/api-client-react';
-import { storage } from '../lib/storage';
+import React, { useState } from 'react';
+import { Plus, Trash2, Search, X, ArrowLeft, RefreshCw } from 'lucide-react';
+import { useListProjects, useDeleteProject } from '@workspace/api-client-react';
 import { ProjectData } from '../types';
 import { usePixelEditor } from '../hooks/usePixelEditor';
 import { toast } from 'sonner';
@@ -13,21 +12,30 @@ interface ModelManagerProps {
 }
 
 export const ModelManager: React.FC<ModelManagerProps> = ({ editor, onClose }) => {
-  const { project, setProject } = editor;
-  
+  const { setProject } = editor;
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+
   const { data: projects, isLoading, refetch } = useListProjects();
   const deleteMutation = useDeleteProject();
 
+  const filtered = projects?.filter(p =>
+    p.name.toLowerCase().includes(search.toLowerCase())
+  );
+
   const handleLoad = async (id: string) => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/projects/${id}`);
-      if (!res.ok) throw new Error('Failed to load project');
-      const fullProject = await res.json();
-      setProject(fullProject.data as ProjectData);
+      if (!res.ok) throw new Error('Failed to load');
+      const full = await res.json();
+      setProject(full.data as ProjectData);
       toast.success('Project loaded!');
       onClose();
-    } catch (e) {
+    } catch {
       toast.error('Failed to load project');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -37,88 +45,152 @@ export const ModelManager: React.FC<ModelManagerProps> = ({ editor, onClose }) =
       await deleteMutation.mutateAsync({ id });
       toast.success('Project deleted');
       refetch();
-    } catch (e) {
+    } catch {
       toast.error('Failed to delete project');
     }
   };
 
   return (
-    <div className="absolute inset-0 bg-[#0d0d12] z-50 flex flex-col p-8 overflow-y-auto crt-overlay">
-      <div className="max-w-6xl w-full mx-auto flex flex-col gap-8 relative z-10">
-        
-        <div className="flex items-center justify-between border-b border-[#1a1a24] pb-4">
-          <h2 className="font-pixel text-primary text-xl uppercase tracking-widest drop-shadow-[0_0_8px_rgba(124,58,237,0.5)]">
-            Models Library
-          </h2>
-          <button 
-            onClick={onClose}
-            className="text-muted-foreground hover:text-white font-mono text-sm border border-[#1a1a24] px-4 py-2 hover:bg-[#111118] transition-colors"
-          >
-            RETURN TO EDITOR (ESC)
-          </button>
+    <div className="flex flex-col h-full bg-[#05050c] overflow-hidden crt-overlay">
+      {/* Header */}
+      <div className="relative z-10 border-b border-border/50 bg-card/80 backdrop-blur-sm shrink-0">
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="p-2 text-muted-foreground hover:text-white hover:bg-muted/40 rounded-sm transition-colors"
+            >
+              <ArrowLeft size={16} />
+            </button>
+            <h1 className="font-pixel text-[14px] text-primary glow-purple uppercase tracking-widest">
+              Models Library
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => refetch()}
+              className="p-2 text-muted-foreground hover:text-white hover:bg-muted/40 rounded-sm transition-colors"
+              title="Refresh"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {/* New Project Card CTA */}
-          <div 
+        {/* Search bar */}
+        <div className="px-6 pb-4">
+          <div className="relative">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search projects..."
+              className="w-full bg-muted/30 border border-border/50 pl-8 pr-8 py-2 text-[12px] font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-primary/50 rounded-sm"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-white"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="relative z-10 flex-1 overflow-y-auto px-6 py-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+
+          {/* New project card */}
+          <div
             onClick={onClose}
-            className="aspect-square border-2 border-dashed border-[#2a1545] rounded-sm flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-primary/5 hover:border-primary transition-all group"
+            className="aspect-square border-2 border-dashed border-border/30 flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-primary/5 hover:border-primary/50 transition-all group rounded-sm"
           >
-            <div className="w-12 h-12 rounded-full bg-[#111118] flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-              <Plus className="text-muted-foreground group-hover:text-primary transition-colors" size={24} />
+            <div className="w-10 h-10 rounded-sm bg-muted/30 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+              <Plus size={20} className="text-muted-foreground/50 group-hover:text-primary transition-colors" />
             </div>
-            <span className="font-pixel text-[10px] text-muted-foreground group-hover:text-primary transition-colors">NEW PROJECT</span>
+            <span className="font-pixel text-[8px] text-muted-foreground/50 group-hover:text-primary transition-colors text-center">
+              New Project
+            </span>
           </div>
 
           {isLoading ? (
-            <div className="col-span-full py-20 text-center font-mono text-muted-foreground animate-pulse">
-              LOADING MANUSCRIPTS...
-            </div>
-          ) : projects?.length === 0 ? (
-            <div className="col-span-full py-20 text-center font-mono text-muted-foreground border border-dashed border-[#1a1a24]">
-              No saved projects found in the archives.
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="aspect-square bg-muted/20 border border-border/30 rounded-sm animate-pulse" />
+            ))
+          ) : filtered?.length === 0 ? (
+            <div className="col-span-full py-16 text-center">
+              <p className="font-pixel text-[10px] text-muted-foreground/50">
+                {search ? `No projects matching "${search}"` : 'No saved projects yet.'}
+              </p>
+              <p className="font-mono text-[11px] text-muted-foreground/30 mt-2">
+                Save a project using Ctrl+S to see it here.
+              </p>
             </div>
           ) : (
-            projects?.map(p => (
-              <div 
+            filtered?.map(p => (
+              <div
                 key={p.id}
                 onClick={() => handleLoad(p.id)}
-                className="group flex flex-col bg-[#111118] border border-[#1a1a24] rounded-sm overflow-hidden cursor-pointer hover:border-primary/50 transition-all hover:shadow-[0_0_20px_rgba(124,58,237,0.15)]"
+                className={cn(
+                  'group flex flex-col bg-card border border-border/40 rounded-sm overflow-hidden cursor-pointer hover:border-primary/50 transition-all hover:shadow-[0_0_20px_rgba(124,58,237,0.12)]',
+                  loading && 'pointer-events-none opacity-50'
+                )}
               >
-                <div className="aspect-square bg-[#08080a] relative p-4 flex items-center justify-center checker-bg">
+                {/* Thumbnail */}
+                <div className="aspect-square bg-[#07070f] relative flex items-center justify-center checker-bg">
                   {p.thumbnail ? (
-                    <img src={p.thumbnail} alt={p.name} className="max-w-full max-h-full object-contain pixelated" />
+                    <img
+                      src={p.thumbnail}
+                      alt={p.name}
+                      className="max-w-[80%] max-h-[80%] object-contain pixelated"
+                    />
                   ) : (
-                    <div className="font-pixel text-[8px] text-muted-foreground/30">NO PREVIEW</div>
+                    <div className="font-pixel text-[7px] text-muted-foreground/20">NO PREVIEW</div>
                   )}
-                  
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                    <button className="bg-primary text-white font-pixel text-[10px] px-4 py-2 rounded-sm shadow-[0_0_10px_rgba(124,58,237,0.5)]">
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                    <span className="bg-primary text-white font-pixel text-[8px] px-3 py-1.5 shadow-[0_0_12px_rgba(124,58,237,0.5)]">
                       LOAD
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="p-3 border-t border-[#1a1a24] flex items-center justify-between bg-[#0d0d12]">
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="font-mono text-sm text-foreground truncate">{p.name}</span>
-                    <span className="font-pixel text-[8px] text-muted-foreground mt-1 tracking-wider">
-                      {p.width}×{p.height} • {p.mode.toUpperCase()}
                     </span>
                   </div>
-                  <button 
-                    onClick={(e) => handleDelete(p.id, e)}
-                    className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-sm opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                </div>
+
+                {/* Info */}
+                <div className="px-2 py-2 border-t border-border/30 bg-card/80 flex items-start justify-between gap-1">
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-mono text-[11px] text-foreground/80 truncate">{p.name}</span>
+                    <span className="font-pixel text-[7px] text-muted-foreground/50 mt-0.5">
+                      {p.width}×{p.height}
+                    </span>
+                  </div>
+                  <button
+                    onClick={e => handleDelete(p.id, e)}
+                    className="p-1 text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 rounded-sm opacity-0 group-hover:opacity-100 transition-all shrink-0 mt-0.5"
                     title="Delete"
                   >
-                    <Trash2 size={14} />
+                    <Trash2 size={11} />
                   </button>
                 </div>
               </div>
             ))
           )}
         </div>
+      </div>
 
+      {/* Footer */}
+      <div className="relative z-10 border-t border-border/30 bg-card/50 px-6 py-3 shrink-0 flex items-center justify-between">
+        <span className="font-pixel text-[8px] text-muted-foreground/40">
+          {filtered?.length ?? 0} project{filtered?.length !== 1 ? 's' : ''}
+        </span>
+        <button
+          onClick={onClose}
+          className="font-pixel text-[8px] text-muted-foreground hover:text-white border border-border/40 px-3 py-1.5 hover:bg-muted/40 transition-colors"
+        >
+          RETURN TO EDITOR
+        </button>
       </div>
     </div>
   );
