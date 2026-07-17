@@ -1,0 +1,1 @@
+- [PixelForge AI engine](pixelforge-ai-engine.md) — fully client-side procedural engine; no OpenAI; api-server ai.ts returns 410; all generation in pixelArtEngine.ts
