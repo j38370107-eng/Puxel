@@ -4,7 +4,11 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+function getOpenAI(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not set. Please add it in your Replit Secrets.");
+  return new OpenAI({ apiKey });
+}
 
 const STYLE_PROMPTS: Record<string, string> = {
   blasphemous:
@@ -95,7 +99,7 @@ router.post("/generate-sprite", async (req, res) => {
         clampedFrames
       );
 
-      const response = await openai.images.generate({
+      const response = await getOpenAI().images.generate({
         model: "gpt-image-1",
         prompt: enhancedPrompt,
         size: "1024x1024",
@@ -147,7 +151,7 @@ router.post("/enhance-image", async (req, res) => {
     const buf = Buffer.from(imageBase64.replace(/^data:image\/\w+;base64,/, ""), "base64");
     const file = await OpenAI.toFile(buf, "input.png", { type: "image/png" });
 
-    const response = await openai.images.edit({
+    const response = await getOpenAI().images.edit({
       model: "gpt-image-1",
       image: file,
       prompt: enhancePrompt,
